@@ -193,6 +193,44 @@ public class PassthroughDiscovery {
         @Override
         public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
             Type[] argTypes = Type.getArgumentTypes(desc);
+            switch (opcode){
+                case Opcodes.INVOKESTATIC:
+                case Opcodes.INVOKEINTERFACE:
+                case Opcodes.INVOKEVIRTUAL:
+                case Opcodes.INVOKESPECIAL:
+                    //todo 处理调用恶意方法的情况
+                    final List<Set<Integer>> argTaint = new ArrayList<Set<Integer>>(argTypes.length);
+                    for (int i = 0; i < argTypes.length; i++) {
+                        argTaint.add(null);
+                    }
+
+                    int stackIndex = 0;
+                    for (int i = 0; i < argTypes.length; i++) {
+                        Type argType = argTypes[i];
+                        if (argType.getSize() > 0) {
+                            //栈顶对应被调用方法最右边的参数
+                            argTaint.set(argTypes.length - 1 - i, operandStack.get(stackIndex + argType.getSize() - 1));
+                        }
+                        stackIndex += argType.getSize();
+                    }
+
+                    // 前面已做逆拓扑，调用链最末端最先被visit，因此，调用到的方法必然已被visit分析过
+                    Set<Integer> passthrough = passthroughDataflow.get(new MethodReference.Handle(owner, name, desc));
+                    if (passthrough != null && passthrough.size()>0) {
+                        for (Integer passthroughDataflowArg : passthrough) {
+                            returnTaint.addAll(argTaint.get(new Integer(passthroughDataflowArg)));
+                        }
+                        //如果大于0表示调用方法可以污染到被调用方法
+                        if(returnTaint.size()>0){
+                            // 如果调用方法为_jspService，并且污染值在第一位(request参数是_jspService方法第一位，说明恶意类可以被request污染--也就是攻击者可控)
+                            if(this.name.equals("_jspService") && returnTaint.contains(1)){
+                                logger.info(this.owner+"是webshell!!!");
+                            }
+                            logger.info("类:"+this.owner+"方法:"+this.name+"调用到被污染方法:"+name);
+                            logger.info("污染点为:"+returnTaint);
+                        }
+                    }
+            }
             if(opcode==Opcodes.INVOKEINTERFACE){
                 boolean isRequestMethod=owner.equals("javax/servlet/http/HttpServletRequest");
                 //处理ProcessBuildr马的情况
@@ -243,11 +281,13 @@ public class PassthroughDiscovery {
                             k++;
                         }
                     }
-                    listAll.add(operandStack.get(k));
+                    listAll.addAll(operandStack.get(k));
                     super.visitMethodInsn(opcode, owner, name, desc, itf);
                     operandStack.get(0).addAll(listAll);
                     return ;
                 }
+
+//                //这种情况不需要判断有没有攻击者可控的参数流入，下图告警的情况会在攻击者尝试通过字符串拼接等方式得到一个ProcessBuilder和Runtime才会产生的
                 if (classCallMethod){
                     int k=0;
 //                    Set listAll =new HashSet();
@@ -275,6 +315,7 @@ public class PassthroughDiscovery {
                        taintNum++;
                        if(taint instanceof String){
                            encodeString=(String)taint;
+                           break;                     //todo 新添加的，待测试
                        }else if (taint instanceof Integer){
                            super.visitMethodInsn(opcode, owner, name, desc, itf);
                            operandStack.get(0).addAll(taintList);
@@ -303,6 +344,7 @@ public class PassthroughDiscovery {
                             if(this.name.equals("_jspService")){
                                 logger.info(this.owner+"是webshell!!!");
                             }
+                            //将能够流入到Runtime.exec方法中的入参标记为污染点
                             returnTaint.add(taintNum);
                             super.visitMethodInsn(opcode, owner, name, desc, itf);
                             return;
@@ -312,50 +354,20 @@ public class PassthroughDiscovery {
                 if (append && (operandStack.get(0).size() > 0 || operandStack.get(1).size() > 0)) {
                     Set taintList1=operandStack.get(0);
                     Set taintList2=operandStack.get(1);
-                    if(taintList1.size()>0 || taintList2.size()>0){
-                        super.visitMethodInsn(opcode, owner, name, desc, itf);
+                    super.visitMethodInsn(opcode, owner, name, desc, itf);
+                    if (taintList1.size()>0){
                         operandStack.get(0).addAll(taintList1);
-                        operandStack.get(0).addAll(taintList2);
-                        return ;
                     }
+                    if(taintList2.size()>0){
+                        operandStack.get(0).addAll(taintList2);
+                    }
+                    return ;
                 }
                 if(toString && operandStack.get(0).size()>0){
                     Set taintList=operandStack.get(0);
                     super.visitMethodInsn(opcode, owner, name, desc, itf);
                     operandStack.get(0).addAll(taintList);
                     return ;
-                }
-
-                //todo 处理调用恶意类的情况
-                final List<Set<Integer>> argTaint = new ArrayList<Set<Integer>>(argTypes.length);
-                for (int i = 0; i < argTypes.length; i++) {
-                    argTaint.add(null);
-                }
-
-                int stackIndex = 0;
-                for (int i = 0; i < argTypes.length; i++) {
-                    Type argType = argTypes[i];
-                    if (argType.getSize() > 0) {
-                        //栈顶对应被调用方法最右边的参数
-                        argTaint.set(argTypes.length - 1 - i, operandStack.get(stackIndex + argType.getSize() - 1));
-                    }
-                    stackIndex += argType.getSize();
-                }
-
-                //todo 前面已做逆拓扑，调用链最末端最先被visit，因此，调用到的方法必然已被visit分析过
-                Set<Integer> passthrough = passthroughDataflow.get(new MethodReference.Handle(owner, name, desc));
-                if (passthrough != null && passthrough.size()>0) {
-                    for (Integer passthroughDataflowArg : passthrough) {
-                        returnTaint.addAll(argTaint.get(new Integer(passthroughDataflowArg)));
-                    }
-                    if(returnTaint.size()>0){
-                        //todo 如果调用方法为_jspService，并且污染值在第一位(request参数是_jspService方法第一位，说明恶意类可以被request污染--也就是攻击者可控)
-                        if(this.name.equals("_jspService") && returnTaint.contains(1)){
-                            logger.info(this.owner+"是webshell!!!");
-                        }
-                        logger.info("类:"+this.owner+"方法:"+this.name+"调用到被污染方法:"+name);
-                        logger.info("污染点为:"+returnTaint);
-                    }
                 }
             }
             //调用构造方法
@@ -466,13 +478,17 @@ public class PassthroughDiscovery {
             super.visitIntInsn(opcode, operand);
         }
 
+
         @Override
         public void visitInsn(int opcode) {
             if (opcode == Opcodes.AASTORE) {
                 Set taintList=operandStack.get(0);
                 if(taintList.size()>0){
                     super.visitInsn(opcode);
-                    operandStack.get(0).addAll(taintList);
+                    // 这里涉及一个很坑的问题，如果是p[i]="456"+p[i]+"123"这种情况，当执行aastore指令的时候，操作栈中只有三个，super.visitInsn(Opcodes.AASTORE)一调用，栈中空了，再取 operandStack.get(0)会报错
+                    if(operandStack.size()>0){
+                        operandStack.get(0).addAll(taintList);
+                    }
                     return ;
                 }
             }
@@ -489,6 +505,15 @@ public class PassthroughDiscovery {
                     ArrayList list=new ArrayList<>();
                     list.addAll(taintList);
                     operandStack.set(0,list);
+                }
+                return ;
+            }
+            if(opcode==Opcodes.AALOAD){
+                //operandStack.get(1)为数组对象
+                Set taintList=operandStack.get(1);
+                super.visitInsn(opcode);
+                if(taintList.size()>0){
+                    operandStack.get(0).addAll(taintList);
                 }
                 return ;
             }
