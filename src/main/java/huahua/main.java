@@ -11,6 +11,7 @@ import org.apache.jasper.JspC;
 import org.apache.log4j.Logger;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -64,27 +65,11 @@ public class main {
             passthroughDiscovery.discover();
             FindEvilDiscovery findEvilDiscovery=new FindEvilDiscovery();
             findEvilDiscovery.discover();
-//            for(String evilClassName:Constant.evilClass){
-//                System.out.println( Constant.classNameToJspName.get(evilClassName));
-//            }
-
-//            for (String classFileName : classFileNameList) {
-//                byte[] classData=Files.readAllBytes(Paths.get(classFileName));
-//                String tempName=classFileName.substring(classFileName.lastIndexOf(File.separator)+1);
-//                String rootPath=new File("JspCompile").getAbsolutePath()+File.separator+"org"+File.separator+"apache"+File.separator+"jsp";
-//                String relativeJspClassName=EncodeUtil.reductionRelativePath(classFileName,rootPath);
-//                String relativeJspName=relativeJspClassName.substring(0,relativeJspClassName.lastIndexOf("."));
-//                //webJspName为对应在web服务器上jsp文件的位置
-//                String webJspName=(command.webDir.substring(command.webDir.length()-1,command.webDir.length()).equals(File.separator) ? command.webDir : command.webDir+File.separator) + relativeJspName;
-//                logger.info("开始对 "+webJspName+"进行扫描");
-//                try {
-//                    ClassReader cr = new ClassReader(classData);
-//                    ReflectionShellClassVisitor cv = new ReflectionShellClassVisitor();
-//                    cr.accept(cv, ClassReader.EXPAND_FRAMES);
-//                } catch (Exception e) {
-//                    logger.info("扫描过程出错");
-//                }
-//            }
+            FileOutputStream fileOutputStream=new FileOutputStream(new File(command.savePath));
+            for(String msg:Constant.msgList){
+                fileOutputStream.write((msg+"\r\n").getBytes("utf-8"));
+            }
+            fileOutputStream.close();
         } catch (Exception e){
             e.printStackTrace();
         }
