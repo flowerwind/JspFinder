@@ -3,9 +3,8 @@ package huahua;
 import huahua.Config.Command;
 import com.beust.jcommander.JCommander;
 import huahua.Constant.Constant;
+import huahua.Discovery.FindEvilDiscovery;
 import huahua.Discovery.PassthroughDiscovery;
-import huahua.Discovery.newPassthroughDiscovery;
-import huahua.data.MethodReference;
 import huahua.util.EncodeUtil;
 import huahua.util.FileUtil;
 import org.apache.jasper.JspC;
@@ -15,7 +14,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.List;
 
 //首先按照逆拓扑排序，把类中方法的调用进行排序
 //排序完毕后，按照从前到后的顺序观察方法。如果调用危险了方法，如Runtime.exec或者ProcessBuilder的start方法，那么分析其参数是否被方法的入参所控制，如果被入参所控制，那么其就是一个危险方法。将方法名和哪几个参数能够污染做成Map放到ClassVisitor内部字段的队列中。
@@ -62,10 +60,10 @@ public class main {
                 String webJspName=(command.webDir.substring(command.webDir.length()-1,command.webDir.length()).equals(File.separator) ? command.webDir : command.webDir+File.separator) + relativeJspName;
                 Constant.classNameToJspName.put(classFileName,webJspName);
             }
-            newPassthroughDiscovery passthroughDiscovery =new newPassthroughDiscovery();
+            PassthroughDiscovery passthroughDiscovery =new PassthroughDiscovery();
             passthroughDiscovery.discover();
-            PassthroughDiscovery passthroughDiscovery1=new PassthroughDiscovery();
-            passthroughDiscovery1.discover();
+            FindEvilDiscovery findEvilDiscovery=new FindEvilDiscovery();
+            findEvilDiscovery.discover();
 //            for(String evilClassName:Constant.evilClass){
 //                System.out.println( Constant.classNameToJspName.get(evilClassName));
 //            }

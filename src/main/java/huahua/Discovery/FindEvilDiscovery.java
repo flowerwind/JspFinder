@@ -10,8 +10,8 @@ import org.objectweb.asm.commons.JSRInlinerAdapter;
 import java.io.IOException;
 import java.util.*;
 
-public class PassthroughDiscovery {
-    private static final Logger logger = Logger.getLogger(PassthroughDiscovery.class);
+public class FindEvilDiscovery {
+    private static final Logger logger = Logger.getLogger(FindEvilDiscovery.class);
 
     public void discover(){
         findEvilDataflow();
@@ -23,21 +23,21 @@ public class PassthroughDiscovery {
             for(MethodReference.Handle methodToVisit:methodCalls){
                 byte[] classByte=Constant.classNameToByte.get(classFileName);
                 ClassReader cr=new ClassReader(classByte);
-                PassthroughDataflowClassVisitor passthroughDataflowClassVisitor=new PassthroughDataflowClassVisitor(EvilDataflow,Opcodes.ASM6,methodToVisit,classFileName);
-                cr.accept(passthroughDataflowClassVisitor,ClassReader.EXPAND_FRAMES);
+                FindEvilDataflowClassVisitor findEvilDataflowClassVisitor=new FindEvilDataflowClassVisitor(EvilDataflow,Opcodes.ASM6,methodToVisit,classFileName);
+                cr.accept(findEvilDataflowClassVisitor,ClassReader.EXPAND_FRAMES);
             }
         }
 
     }
 
-    private class PassthroughDataflowClassVisitor extends ClassVisitor{
-        private PassthroughDataflowMethodVisitor passthroughDataflowMethodVisitor;
+    private class FindEvilDataflowClassVisitor extends ClassVisitor{
+        private FindEvilDataflowMethodVisitor findEvilDataflowMethodVisitor;
         private final Map<MethodReference.Handle, Set<Integer>> EvilDataflow;
         private final MethodReference.Handle methodToVisit;
         private String name;
         private String classFileName;
         private Set printEvilMessage=new HashSet();
-        public PassthroughDataflowClassVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow,int api,MethodReference.Handle methodToVisit,String classFileName){
+        public FindEvilDataflowClassVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow,int api,MethodReference.Handle methodToVisit,String classFileName){
             super(api);
             this.EvilDataflow=EvilDataflow;
             this.methodToVisit=methodToVisit;
@@ -61,22 +61,22 @@ public class PassthroughDiscovery {
                 if(Constant.debug){
                     logger.info("观察的类为:"+this.name+"     观察的方法为:"+name);
                 }
-                passthroughDataflowMethodVisitor=new PassthroughDataflowMethodVisitor(EvilDataflow,Opcodes.ASM6,access,descriptor,mv,this.name,name,signature,exceptions,classFileName,printEvilMessage);
+                findEvilDataflowMethodVisitor=new FindEvilDataflowMethodVisitor(EvilDataflow,Opcodes.ASM6,access,descriptor,mv,this.name,name,signature,exceptions,classFileName,printEvilMessage);
                 EvilDataflow.put(new MethodReference.Handle(this.name,name,descriptor),getReturnTaint());
-                return new JSRInlinerAdapter(passthroughDataflowMethodVisitor, access, name, descriptor, signature, exceptions);
+                return new JSRInlinerAdapter(findEvilDataflowMethodVisitor, access, name, descriptor, signature, exceptions);
             }
             return super.visitMethod(access,name,descriptor,signature,exceptions);
         }
 
         public Set<Integer> getReturnTaint() {
-            if (passthroughDataflowMethodVisitor == null) {
+            if (findEvilDataflowMethodVisitor == null) {
                 throw new IllegalStateException("Never constructed the passthroughDataflowmethodVisitor!");
             }
-            return passthroughDataflowMethodVisitor.toEvilTaint;
+            return findEvilDataflowMethodVisitor.toEvilTaint;
         }
     }
 
-    private class PassthroughDataflowMethodVisitor extends CoreMethodAdapter {
+    private class FindEvilDataflowMethodVisitor extends CoreMethodAdapter {
         private final Set<Integer> toEvilTaint;//被污染的返回数据
         private final Map<MethodReference.Handle, Set<Integer>> EvilDataflow;
         private final int access;
@@ -86,7 +86,7 @@ public class PassthroughDiscovery {
         private final boolean isStatic;
         private String classFileName;
         private Set printEvilMessage;
-        public PassthroughDataflowMethodVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow,int api,int access,String desc,MethodVisitor mv,String owner,String name,String signature,String[] exceptions,String classFileName,Set printEvilMessage){
+        public FindEvilDataflowMethodVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow,int api,int access,String desc,MethodVisitor mv,String owner,String name,String signature,String[] exceptions,String classFileName,Set printEvilMessage){
             super(api,mv,owner,access,name,desc,signature,exceptions);
             this.EvilDataflow=EvilDataflow;
             this.toEvilTaint=new HashSet<>();
@@ -242,7 +242,7 @@ public class PassthroughDiscovery {
                                 //这种情况就是企图反射调用java.lang.ProcessBuilder或者java.lang.Runtime。直接调用命令执行方法可能是程序的正常业务功能，但反射调用命令执行方法基本就是攻击者行为。
                                 if (!printEvilMessage.contains(1)){
                                     printEvilMessage.add(1);
-                                logger.info(Constant.classNameToJspName.get(classFileName)+"------企图调用ProcessBuilder或Runtime，判断为webshell");
+                                logger.info(Constant.classNameToJspName.get(classFileName)+"------企图调用ProcessBuilder或Runtime，该文件为webshell");
                                 Constant.evilClass.add(classFileName);
                                 }
                             }
@@ -252,7 +252,7 @@ public class PassthroughDiscovery {
                     if(operandStack.get(k).contains("java.lang.ProcessBuilder")||operandStack.get(k).contains("java.lang.Runtime")){
                         if (!printEvilMessage.contains(1)){
                             printEvilMessage.add(1);
-                            logger.info(Constant.classNameToJspName.get(classFileName)+"------企图调用ProcessBuilder或Runtime，判断为webshell");
+                            logger.info(Constant.classNameToJspName.get(classFileName)+"------企图调用ProcessBuilder或Runtime，该文件为webshell");
                         Constant.evilClass.add(classFileName);
                         }
                     }
