@@ -3,7 +3,6 @@ package huahua.Discovery;
 import huahua.Constant.Constant;
 import huahua.core.CoreMethodAdapter;
 import huahua.data.MethodReference;
-import huahua.main;
 import org.apache.log4j.Logger;
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.JSRInlinerAdapter;
@@ -59,7 +58,9 @@ public class PassthroughDiscovery {
             //对method进行观察
             MethodVisitor mv=super.visitMethod(access, name, descriptor, signature, exceptions);
             if(name.equals(this.methodToVisit.getName())){
-                logger.info("观察的类为:"+this.name+"     观察的方法为:"+name);
+                if(Constant.debug){
+                    logger.info("观察的类为:"+this.name+"     观察的方法为:"+name);
+                }
                 passthroughDataflowMethodVisitor=new PassthroughDataflowMethodVisitor(EvilDataflow,Opcodes.ASM6,access,descriptor,mv,this.name,name,signature,exceptions,classFileName,printEvilMessage);
                 EvilDataflow.put(new MethodReference.Handle(this.name,name,descriptor),getReturnTaint());
                 return new JSRInlinerAdapter(passthroughDataflowMethodVisitor, access, name, descriptor, signature, exceptions);
@@ -188,8 +189,10 @@ public class PassthroughDiscovery {
                                 logger.info(Constant.classNameToJspName.get(classFileName) + "恶意类如(Runtime、ProcessBuilder)可被request污染，该文件为webshell!!!");
                                 Constant.evilClass.add(classFileName);
                             }
-                            logger.info("类:"+this.owner+"方法:"+this.name+"调用到被污染方法:"+name);
-                            logger.info("污染点为:"+toEvilTaint);
+                            if(Constant.debug){
+                                logger.info("类:"+this.owner+"方法:"+this.name+"调用到被污染方法:"+name);
+                                logger.info("污染点为:"+toEvilTaint);
+                            }
                         }
                     }
                     break;
@@ -289,7 +292,9 @@ public class PassthroughDiscovery {
                     for(Object node:operandStack.get(0)){
                         if( node instanceof Integer){
                             int taintNum= (Integer) node;
-                            logger.info("Runtime.exec可被arg"+taintNum+"污染");
+                            if(Constant.debug){
+                                logger.info("Runtime.exec可被arg"+taintNum+"污染");
+                            }
                             if(this.name.equals("_jspService")){
                                 if (!printEvilMessage.contains(1)){
                                     printEvilMessage.add(1);
@@ -372,7 +377,9 @@ public class PassthroughDiscovery {
                     for(Object node:operandStack.get(0)){
                         if( node instanceof Integer){
                             int taintNum= (Integer) node;
-                            logger.info("ProcessBuilder可被arg"+taintNum+"污染");
+                            if(Constant.debug){
+                                logger.info("ProcessBuilder可被arg"+taintNum+"污染");
+                            }
                             if(this.name.equals("_jspService")){
                                 if (!printEvilMessage.contains(1)){
                                     printEvilMessage.add(1);

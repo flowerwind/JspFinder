@@ -66,9 +66,9 @@ public class main {
             passthroughDiscovery.discover();
             PassthroughDiscovery passthroughDiscovery1=new PassthroughDiscovery();
             passthroughDiscovery1.discover();
-            for(String evilClassName:Constant.evilClass){
-                System.out.println( Constant.classNameToJspName.get(evilClassName));
-            }
+//            for(String evilClassName:Constant.evilClass){
+//                System.out.println( Constant.classNameToJspName.get(evilClassName));
+//            }
 
 //            for (String classFileName : classFileNameList) {
 //                byte[] classData=Files.readAllBytes(Paths.get(classFileName));
