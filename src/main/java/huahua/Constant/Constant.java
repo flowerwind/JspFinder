@@ -10,6 +10,6 @@ public class Constant {
    public static Map<String, List<MethodReference.Handle>> classFileNameToSortedMethodCalls=new HashMap<>();
    public static Set<String> evilClass=new HashSet<String>();
    public static Map classNameToJspName=new HashMap();
-   public static Set<String> msgList=new HashSet();
+   public static List<String> msgList=new ArrayList<>();
    public static boolean debug=false;
 }
