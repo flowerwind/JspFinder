@@ -4,11 +4,14 @@ import huahua.Config.Command;
 import com.beust.jcommander.JCommander;
 import huahua.Constant.Constant;
 import huahua.Discovery.PassthroughDiscovery;
+import huahua.Discovery.newPassthroughDiscovery;
 import huahua.data.MethodReference;
+import huahua.util.EncodeUtil;
 import huahua.util.FileUtil;
 import org.apache.jasper.JspC;
 import org.apache.log4j.Logger;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -30,6 +33,7 @@ public class main {
             logger.error("web目录为空，请指定-d参数");
             return ;
         }
+        Constant.debug=command.debug;
         start(command);
     }
     private static void start(Command command) {
@@ -47,11 +51,24 @@ public class main {
             ArrayList<String> filenameList = new ArrayList<String>();
             ArrayList<String> classFileNameList = FileUtil.getAllClassFileName("JspCompile", filenameList);
             for(String classFileName : classFileNameList){
+                //形成class文件和byte[]文件内容的对应
                 byte[] classData=Files.readAllBytes(Paths.get(classFileName));
                 Constant.classNameToByte.put(classFileName,classData);
+                //形成class文件和被扫描的jsp之间的对应
+                String rootPath=new File("JspCompile").getAbsolutePath()+File.separator+"org"+File.separator+"apache"+File.separator+"jsp";
+                String relativeJspClassName= EncodeUtil.reductionRelativePath(classFileName,rootPath);
+                String relativeJspName=relativeJspClassName.substring(0,relativeJspClassName.lastIndexOf("."));
+                //webJspName为对应在web服务器上jsp文件的位置
+                String webJspName=(command.webDir.substring(command.webDir.length()-1,command.webDir.length()).equals(File.separator) ? command.webDir : command.webDir+File.separator) + relativeJspName;
+                Constant.classNameToJspName.put(classFileName,webJspName);
             }
-            PassthroughDiscovery passthroughDiscovery =new PassthroughDiscovery();
+            newPassthroughDiscovery passthroughDiscovery =new newPassthroughDiscovery();
             passthroughDiscovery.discover();
+            PassthroughDiscovery passthroughDiscovery1=new PassthroughDiscovery();
+            passthroughDiscovery1.discover();
+            for(String evilClassName:Constant.evilClass){
+                System.out.println( Constant.classNameToJspName.get(evilClassName));
+            }
 
 //            for (String classFileName : classFileNameList) {
 //                byte[] classData=Files.readAllBytes(Paths.get(classFileName));

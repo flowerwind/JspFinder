@@ -13,96 +13,18 @@ import java.util.*;
 
 public class PassthroughDiscovery {
     private static final Logger logger = Logger.getLogger(PassthroughDiscovery.class);
-//    private final List<MethodReference> discoveredMethods = new ArrayList<>();
-    private Map<String,Map<MethodReference.Handle, Set<MethodReference.Handle>>> classFileNameToMethodCalls=new HashMap<>();
-    private Map<String,List<MethodReference.Handle>> classFileNameToSortedMethodCalls=new HashMap<>();      //最前面的方法是需要最先观察得方法
+
     public void discover(){
-        discoverMethodCalls();
-        SortMethodCalls();
-        calculatePassthroughDataflow();
+        findEvilDataflow();
     }
-
-    private  void discoverMethodCalls(){
-        Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls;
-        for (String classFileName: Constant.classNameToByte.keySet()){
-            byte[] classByte=Constant.classNameToByte.get(classFileName);
-            ClassReader cr = new ClassReader(classByte);
-            MethodCallDiscoveryClassVisitor methodCallDiscoveryClassVisitor=new MethodCallDiscoveryClassVisitor();
-            cr.accept(methodCallDiscoveryClassVisitor,ClassReader.EXPAND_FRAMES);
-            methodCalls=methodCallDiscoveryClassVisitor.getMethodCalls();
-            classFileNameToMethodCalls.put(classFileName,methodCalls);
-//            for (MethodReference.Handle methodClassKey:methodCalls.keySet()){
-//                System.out.println("-----------------");
-//                if(methodClassKey.getOwner().equals("org/apache/jsp/ProcessBuilder_002dreflect_002dcmd_jsp"))
-//                {
-//                    System.out.println(methodClassKey.getOwner());
-//                    System.out.println(methodClassKey);
-//                    System.out.println("-----------------");
-//                    System.out.println(methodCalls.get(methodClassKey));
-//                    System.out.println("\r\n\r\n");
-//                }
-//            }
-        }
-    }
-
-    private void SortMethodCalls(){
-        for(String classFileName:classFileNameToMethodCalls.keySet()){
-            Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls =classFileNameToMethodCalls.get(classFileName);
-            Map<MethodReference.Handle, Set<MethodReference.Handle>> outgoingReferences = new HashMap<>();
-            for (Map.Entry<MethodReference.Handle, Set<MethodReference.Handle>> entry : methodCalls.entrySet()) {
-                MethodReference.Handle method = entry.getKey();
-                outgoingReferences.put(method, new HashSet<>(entry.getValue()));
-            }
-
-            // Topological sort methods
-            logger.debug("Performing topological sort...");
-            Set<MethodReference.Handle> dfsStack = new HashSet<>();
-            Set<MethodReference.Handle> visitedNodes = new HashSet<>();
-            List<MethodReference.Handle> sortedMethods = new ArrayList<>(outgoingReferences.size());
-            for (MethodReference.Handle root : outgoingReferences.keySet()) {
-                //遍历集合中的起始方法，进行递归搜索DFS，通过逆拓扑排序，调用链的最末端排在最前面，
-                // 这样才能实现入参、返回值、函数调用链之间的污点影响
-                dfsTsort(outgoingReferences, sortedMethods, visitedNodes, dfsStack, root);
-            }
-            logger.debug(String.format("Outgoing references %d, sortedMethods %d", outgoingReferences.size(), sortedMethods.size()));
-            classFileNameToSortedMethodCalls.put(classFileName,sortedMethods);
-        }
-    }
-
-    private static void dfsTsort(Map<MethodReference.Handle, Set<MethodReference.Handle>> outgoingReferences,
-                                 List<MethodReference.Handle> sortedMethods, Set<MethodReference.Handle> visitedNodes,
-                                 Set<MethodReference.Handle> stack, MethodReference.Handle node) {
-
-        if (stack.contains(node)) {
-            return;
-        }
-        if (visitedNodes.contains(node)) {
-            return;
-        }
-        //根据起始方法，取出被调用的方法集
-        Set<MethodReference.Handle> outgoingRefs = outgoingReferences.get(node);
-        if (outgoingRefs == null) {
-            return;
-        }
-
-        //入栈，以便于递归不造成类似循环引用的死循环整合
-        stack.add(node);
-        for (MethodReference.Handle child : outgoingRefs) {
-            dfsTsort(outgoingReferences, sortedMethods, visitedNodes, stack, child);
-        }
-        stack.remove(node);
-        visitedNodes.add(node);//记录已被探索过的方法，用于在上层调用遇到重复方法时可以跳过
-        sortedMethods.add(node);//递归完成的探索，会添加进来
-    }
-
-    private void calculatePassthroughDataflow(){
-        final Map<MethodReference.Handle, Set<Integer>> passthroughDataflow = new HashMap<>();
-        for(String  classFileName:classFileNameToSortedMethodCalls.keySet()){
-            List<MethodReference.Handle> methodCalls=classFileNameToSortedMethodCalls.get(classFileName);
+    private void findEvilDataflow(){
+        final Map<MethodReference.Handle, Set<Integer>> EvilDataflow = new HashMap<>();
+        for(String  classFileName:Constant.classFileNameToSortedMethodCalls.keySet()){
+            List<MethodReference.Handle> methodCalls=Constant.classFileNameToSortedMethodCalls.get(classFileName);
             for(MethodReference.Handle methodToVisit:methodCalls){
                 byte[] classByte=Constant.classNameToByte.get(classFileName);
                 ClassReader cr=new ClassReader(classByte);
-                PassthroughDataflowClassVisitor passthroughDataflowClassVisitor=new PassthroughDataflowClassVisitor(passthroughDataflow,Opcodes.ASM6,methodToVisit);
+                PassthroughDataflowClassVisitor passthroughDataflowClassVisitor=new PassthroughDataflowClassVisitor(EvilDataflow,Opcodes.ASM6,methodToVisit,classFileName);
                 cr.accept(passthroughDataflowClassVisitor,ClassReader.EXPAND_FRAMES);
             }
         }
@@ -111,13 +33,16 @@ public class PassthroughDiscovery {
 
     private class PassthroughDataflowClassVisitor extends ClassVisitor{
         private PassthroughDataflowMethodVisitor passthroughDataflowMethodVisitor;
-        private final Map<MethodReference.Handle, Set<Integer>> passthroughDataflow;
+        private final Map<MethodReference.Handle, Set<Integer>> EvilDataflow;
         private final MethodReference.Handle methodToVisit;
         private String name;
-        public PassthroughDataflowClassVisitor(Map<MethodReference.Handle, Set<Integer>> passthroughDataflow,int api,MethodReference.Handle methodToVisit){
+        private String classFileName;
+        private Set printEvilMessage=new HashSet();
+        public PassthroughDataflowClassVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow,int api,MethodReference.Handle methodToVisit,String classFileName){
             super(api);
-            this.passthroughDataflow=passthroughDataflow;
+            this.EvilDataflow=EvilDataflow;
             this.methodToVisit=methodToVisit;
+            this.classFileName=classFileName;
         }
 
 
@@ -135,8 +60,8 @@ public class PassthroughDiscovery {
             MethodVisitor mv=super.visitMethod(access, name, descriptor, signature, exceptions);
             if(name.equals(this.methodToVisit.getName())){
                 logger.info("观察的类为:"+this.name+"     观察的方法为:"+name);
-                passthroughDataflowMethodVisitor=new PassthroughDataflowMethodVisitor(passthroughDataflow,Opcodes.ASM6,access,descriptor,mv,this.name,name,signature,exceptions);
-                passthroughDataflow.put(new MethodReference.Handle(this.name,name,descriptor),getReturnTaint());
+                passthroughDataflowMethodVisitor=new PassthroughDataflowMethodVisitor(EvilDataflow,Opcodes.ASM6,access,descriptor,mv,this.name,name,signature,exceptions,classFileName,printEvilMessage);
+                EvilDataflow.put(new MethodReference.Handle(this.name,name,descriptor),getReturnTaint());
                 return new JSRInlinerAdapter(passthroughDataflowMethodVisitor, access, name, descriptor, signature, exceptions);
             }
             return super.visitMethod(access,name,descriptor,signature,exceptions);
@@ -146,27 +71,31 @@ public class PassthroughDiscovery {
             if (passthroughDataflowMethodVisitor == null) {
                 throw new IllegalStateException("Never constructed the passthroughDataflowmethodVisitor!");
             }
-            return passthroughDataflowMethodVisitor.returnTaint;
+            return passthroughDataflowMethodVisitor.toEvilTaint;
         }
     }
 
     private class PassthroughDataflowMethodVisitor extends CoreMethodAdapter {
-        private final Set<Integer> returnTaint;//被污染的返回数据
-        private final Map<MethodReference.Handle, Set<Integer>> passthroughDataflow;
+        private final Set<Integer> toEvilTaint;//被污染的返回数据
+        private final Map<MethodReference.Handle, Set<Integer>> EvilDataflow;
         private final int access;
         private final String desc;
         private final String owner;
         private final String name;
         private final boolean isStatic;
-        public PassthroughDataflowMethodVisitor(Map<MethodReference.Handle, Set<Integer>> passthroughDataflow,int api,int access,String desc,MethodVisitor mv,String owner,String name,String signature,String[] exceptions){
+        private String classFileName;
+        private Set printEvilMessage;
+        public PassthroughDataflowMethodVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow,int api,int access,String desc,MethodVisitor mv,String owner,String name,String signature,String[] exceptions,String classFileName,Set printEvilMessage){
             super(api,mv,owner,access,name,desc,signature,exceptions);
-            this.passthroughDataflow=passthroughDataflow;
-            this.returnTaint=new HashSet<>();
+            this.EvilDataflow=EvilDataflow;
+            this.toEvilTaint=new HashSet<>();
             this.access = access;
             this.desc = desc;
             this.owner=owner;
             this.name=name;
             this.isStatic=(access & Opcodes.ACC_STATIC)!=0;
+            this.classFileName=classFileName;
+            this.printEvilMessage=printEvilMessage;
         }
 
         @Override
@@ -193,12 +122,22 @@ public class PassthroughDiscovery {
         @Override
         public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
             Type[] argTypes = Type.getArgumentTypes(desc);
+            //获取返回值类型大小
+            int retSize = Type.getReturnType(desc).getSize();
+            Set<Integer> resultTaint;
             switch (opcode){
                 case Opcodes.INVOKESTATIC:
                 case Opcodes.INVOKEINTERFACE:
                 case Opcodes.INVOKEVIRTUAL:
                 case Opcodes.INVOKESPECIAL:
                     //todo 处理调用恶意方法的情况
+                    //非静态方法需要把实例类型放在第一个元素
+                    if (opcode != Opcodes.INVOKESTATIC) {
+                        Type[] extendedArgTypes = new Type[argTypes.length+1];
+                        System.arraycopy(argTypes, 0, extendedArgTypes, 1, argTypes.length);
+                        extendedArgTypes[0] = Type.getObjectType(owner);
+                        argTypes = extendedArgTypes;
+                    }
                     final List<Set<Integer>> argTaint = new ArrayList<Set<Integer>>(argTypes.length);
                     for (int i = 0; i < argTypes.length; i++) {
                         argTaint.add(null);
@@ -214,52 +153,52 @@ public class PassthroughDiscovery {
                         stackIndex += argType.getSize();
                     }
 
-                    // 前面已做逆拓扑，调用链最末端最先被visit，因此，调用到的方法必然已被visit分析过
-                    Set<Integer> passthrough = passthroughDataflow.get(new MethodReference.Handle(owner, name, desc));
-                    if (passthrough != null && passthrough.size()>0) {
+                    // 构造方法的调用，意味参数0可以污染返回值
+                    if (name.equals("<init>")) {
+                        // Pass result taint through to original taint set; the initialized object is directly tainted by
+                        // parameters
+                        resultTaint = argTaint.get(0);
+                    } else {
+                        resultTaint = new HashSet<>();
+                    }
+
+
+                    //调用之前PassthroughDiscovery的污染结果，看当前调用到的类是否可以污染，如果可以污染把被哪个参数污染的结果传递下去
+                    Set<Integer> passthrough = Constant.passthroughDataflow.get(new MethodReference.Handle(owner, name, desc));
+                    if(passthrough !=null&&passthrough.size()>0){
                         for (Integer passthroughDataflowArg : passthrough) {
-                            returnTaint.addAll(argTaint.get(new Integer(passthroughDataflowArg)));
+                            resultTaint.addAll(argTaint.get(new Integer(passthroughDataflowArg)));
+                        }
+                    }
+
+                    // 前面已做逆拓扑，调用链最末端最先被visit，因此，调用到的方法必然已被visit分析过
+                    Set<Integer> evilMethodDataflow = EvilDataflow.get(new MethodReference.Handle(owner, name, desc));
+                    if (evilMethodDataflow != null && evilMethodDataflow.size()>0) {
+                        for (Integer evilMethodDataflowArg : evilMethodDataflow) {
+                            //表示argTaint.get(new Integer(evilMethodDataflowArg))里的那个值对应的参数能污染到危险方法
+                            toEvilTaint.addAll(argTaint.get(new Integer(evilMethodDataflowArg)));
                         }
                         //如果大于0表示调用方法可以污染到被调用方法
-                        if(returnTaint.size()>0){
+                       if(toEvilTaint.size()>0){
                             // 如果调用方法为_jspService，并且污染值在第一位(request参数是_jspService方法第一位，说明恶意类可以被request污染--也就是攻击者可控)
-                            if(this.name.equals("_jspService") && returnTaint.contains(1)){
-                                logger.info(this.owner+"是webshell!!!");
+                            if(this.name.equals("_jspService") && toEvilTaint.contains(1)){
+                                //printEvilMessage中如果包含1，则表示该类已经被标记为webshell，并且已经输出告警。如果包含1的话则不要再重复输出告警了。
+                                if (!printEvilMessage.contains(1))
+                                    printEvilMessage.add(1);
+                                logger.info(Constant.classNameToJspName.get(classFileName) + "恶意类如(Runtime、ProcessBuilder)可被request污染，该文件为webshell!!!");
+                                Constant.evilClass.add(classFileName);
                             }
                             logger.info("类:"+this.owner+"方法:"+this.name+"调用到被污染方法:"+name);
-                            logger.info("污染点为:"+returnTaint);
+                            logger.info("污染点为:"+toEvilTaint);
                         }
                     }
-            }
-            if(opcode==Opcodes.INVOKEINTERFACE){
-                boolean isRequestMethod=owner.equals("javax/servlet/http/HttpServletRequest");
-                //处理ProcessBuildr马的情况
-                boolean arrayListAdd=name.equals("add") && owner.equals("java/util/List");
-                if(isRequestMethod && name.substring(0,3).equals("get")){
-                    Set taintList=localVariables.get(1);            //单考虑_jspService方法，request对象必然是在本地变量表的1位置的
-                    super.visitMethodInsn(opcode, owner, name, desc, itf);
-                    operandStack.get(0).addAll(taintList);                   //将request.xxx的返回值设置上request的污点
-                    return;
-                }
-                if (arrayListAdd){
-                    int k=0;
-                    Set listAll =new HashSet();
-                    for (Type argType : Type.getArgumentTypes(desc)) {
-                        int size=argType.getSize();
-                        while (size-- > 0){
-                            Set taintList=operandStack.get(k);
-                            listAll.addAll(taintList);
-                            k++;
-                        }
-                    }
-                    operandStack.get(k).addAll(listAll);             //所有参数过完之后k就来到了操作数栈中的list对象的位置，如果add方法参数包含可被攻击者控制的值，则list对象添加get-param污点
-
-                    super.visitMethodInsn(opcode, owner, name, desc, itf);
-                    return ;
-                }
+                    break;
+                default:
+                    throw new IllegalStateException("Unexpected value: " + opcode);
             }
             //调用实例方法
             if(opcode==Opcodes.INVOKEVIRTUAL){
+                //下面这些bool判断出了Runtime exc的，其他都是看有没有调用到字符串处理的方法，如果有字符串处理的方法，把污点传递(污点中包含字符串明文，传递到一些方法中会做对应模拟处理，比如append会把污点中的字符串相加)
                 boolean subString=owner.equals("java/lang/String")&&name.equals("substring");
                 boolean classCallMethod=owner.equals("java/lang/Class")&&(name.equals("getMethod")||name.equals("getConstructors")||name.equals("getConstructor")||name.equals("getDeclaredConstructors")||name.equals("getDeclaredConstructor")||name.equals("getDeclaredMethod"));
                 boolean decodeBuffer=name.equals("decodeBuffer") && owner.equals("sun/misc/BASE64Decoder") && desc.equals("(Ljava/lang/String;)[B");
@@ -295,14 +234,24 @@ public class PassthroughDiscovery {
                         int size=argType.getSize();
                         while (size-- > 0){
                             Set taintList=operandStack.get(k);
+                            //因为前面各种方法传递、运算 字符串才会在这里得到完整得结果
                             if(taintList.contains("java.lang.ProcessBuilder")||taintList.contains("java.lang.Runtime")){
-                                logger.info("企图调用ProcessBuilder或Runtime，可能为webshell");
+                                //这种情况就是企图反射调用java.lang.ProcessBuilder或者java.lang.Runtime。直接调用命令执行方法可能是程序的正常业务功能，但反射调用命令执行方法基本就是攻击者行为。
+                                if (!printEvilMessage.contains(1)){
+                                    printEvilMessage.add(1);
+                                logger.info(Constant.classNameToJspName.get(classFileName)+"------企图调用ProcessBuilder或Runtime，判断为webshell");
+                                Constant.evilClass.add(classFileName);
+                                }
                             }
                             k++;
                         }
                     }
                     if(operandStack.get(k).contains("java.lang.ProcessBuilder")||operandStack.get(k).contains("java.lang.Runtime")){
-                        logger.info("企图调用ProcessBuilder或Runtime，可能为webshell");
+                        if (!printEvilMessage.contains(1)){
+                            printEvilMessage.add(1);
+                            logger.info(Constant.classNameToJspName.get(classFileName)+"------企图调用ProcessBuilder或Runtime，判断为webshell");
+                        Constant.evilClass.add(classFileName);
+                        }
                     }
                     super.visitMethodInsn(opcode, owner, name, desc, itf);
                     return ;
@@ -342,10 +291,14 @@ public class PassthroughDiscovery {
                             int taintNum= (Integer) node;
                             logger.info("Runtime.exec可被arg"+taintNum+"污染");
                             if(this.name.equals("_jspService")){
-                                logger.info(this.owner+"是webshell!!!");
+                                if (!printEvilMessage.contains(1)){
+                                    printEvilMessage.add(1);
+                                logger.info(Constant.classNameToJspName.get(classFileName)+"------Runtime.exec可受request控制，该文件为webshell!!!");
+                                Constant.evilClass.add(classFileName);
+                                }
                             }
                             //将能够流入到Runtime.exec方法中的入参标记为污染点
-                            returnTaint.add(taintNum);
+                            toEvilTaint.add(taintNum);
                             super.visitMethodInsn(opcode, owner, name, desc, itf);
                             return;
                         }
@@ -372,14 +325,15 @@ public class PassthroughDiscovery {
             }
             //调用构造方法
             if(opcode==Opcodes.INVOKESPECIAL){
+                //除了ProcessBuilder,也都是做污点字符串传递的处理
                 boolean processBuilderInit=owner.equals("java/lang/ProcessBuilder")&&name.equals("<init>");
-                boolean stringByteInit=owner.equals("java/lang/String")&&name.equals("<init>")&&desc.equals("([B)V");
+                boolean stringByteInit=owner.equals("java/lang/String")&&name.equals("<init>")&&(desc.equals("([B)V")||desc.equals("([BLjava/lang/String;)V"));
                 boolean stringInit=owner.equals("java/lang/String")&&name.equals("<init>");
                 boolean stringBuilderInit=owner.equals("java/lang/StringBuilder") && name.equals("<init>") && desc.equals("(Ljava/lang/String;)V");
                 if (stringByteInit){
                     Set taintList=operandStack.get(0);
                     for(Object taint:operandStack.get(0)){
-                        //获取Opcodes.BIPUSH存放进来的byte数组然后还原原貌
+                        //获取Opcodes.BIPUSH存放进来的byte数组然后还原原貌，主应对new String(byte[])这种情况，把byte[]还原成String进行污点传递
                         if(taint instanceof ArrayList){
                             int len=((ArrayList)taint).size();
                             byte[] tmp=new byte[len];
@@ -420,9 +374,13 @@ public class PassthroughDiscovery {
                             int taintNum= (Integer) node;
                             logger.info("ProcessBuilder可被arg"+taintNum+"污染");
                             if(this.name.equals("_jspService")){
-                                logger.info(this.owner+"是webshell!!!");
+                                if (!printEvilMessage.contains(1)){
+                                    printEvilMessage.add(1);
+                                    logger.info(Constant.classNameToJspName.get(classFileName)+"------ProcessBuilder可受request控制，该文件为webshell!!!");
+                                Constant.evilClass.add(classFileName);
+                                }
                             }
-                            returnTaint.add(taintNum);
+                            toEvilTaint.add(taintNum);
                             super.visitMethodInsn(opcode, owner, name, desc, itf);
                             return;
                         }
@@ -438,27 +396,9 @@ public class PassthroughDiscovery {
 
             }
             if(opcode==Opcodes.INVOKESTATIC){
-                boolean isClassForname=name.equals("forName") && owner.equals("java/lang/Class");
                 boolean isValueOf=name.equals("valueOf") && desc.equals("(Ljava/lang/Object;)Ljava/lang/String;") && owner.equals("java/lang/String");
-                if(isClassForname){
-                    int k=0;
-                    Set listAll =new HashSet();
-                    for (Type argType : Type.getArgumentTypes(desc)) {
-                        int size=argType.getSize();
-                        while (size-- > 0){
-                            Set taintList=operandStack.get(k);
-                            if(taintList.size()>0){
-                                listAll.addAll(taintList);
-                            }
-                            k++;
-                        }
-                    }
-                    super.visitMethodInsn(opcode, owner, name, desc, itf);
-                    operandStack.get(0).addAll(listAll);
-                    return ;
-                }
                 if(isValueOf && operandStack.get(0).size()>0){
-                    Set taintList=operandStack.get(0);            //单考虑_jspService方法，request对象必然是在本地变量表的1位置的
+                    Set taintList=operandStack.get(0);
                     super.visitMethodInsn(opcode, owner, name, desc, itf);
                     operandStack.get(0).addAll(taintList);
                     return ;
@@ -466,6 +406,10 @@ public class PassthroughDiscovery {
             }
 
             super.visitMethodInsn(opcode, owner, name, desc, itf);
+            //把调用其他方法获得的污点进行传递
+            if (retSize > 0) {
+                operandStack.get(retSize-1).addAll(resultTaint);
+            }
         }
 
         @Override
@@ -528,64 +472,6 @@ public class PassthroughDiscovery {
                 return;
             }
             super.visitLdcInsn(cst);
-        }
-    }
-
-    private class MethodCallDiscoveryClassVisitor extends ClassVisitor{
-        private String name;
-        private Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls = new HashMap<>();
-        public MethodCallDiscoveryClassVisitor() {
-            super(Opcodes.ASM6);
-        }
-
-        @Override
-        public void visit(int version, int access, String name, String signature,
-                          String superName, String[] interfaces) {
-            super.visit(version, access, name, signature, superName, interfaces);
-            if (this.name != null) {
-                throw new IllegalStateException("ClassVisitor already visited a class!");
-            }
-            this.name = name;
-        }
-
-        @Override
-        public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-            MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-            MethodCallDiscoveryMethodVisitor methodCallDiscoveryMethodVisitor = new MethodCallDiscoveryMethodVisitor(
-                    api, mv, this.name, name, descriptor,methodCalls);
-            return new JSRInlinerAdapter(methodCallDiscoveryMethodVisitor, access, name, descriptor, signature, exceptions);
-        }
-
-        public Map<MethodReference.Handle, Set<MethodReference.Handle>> getMethodCalls() {
-            return methodCalls;
-        }
-    }
-
-    private class MethodCallDiscoveryMethodVisitor extends MethodVisitor{
-        private Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls = new HashMap<>();
-        private final Set<MethodReference.Handle> calledMethods;
-        private final String name;
-        private final String owner;
-        private final String desc;
-        public MethodCallDiscoveryMethodVisitor(int api, MethodVisitor methodVisitor,final String owner, String name, String desc,Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls) {
-            super(api, methodVisitor);
-            this.name=name;
-            this.owner=owner;
-            this.desc=desc;
-            this.calledMethods = new HashSet<>();
-            this.methodCalls=methodCalls;
-        }
-
-        @Override
-        public void visitCode() {
-            methodCalls.put(new MethodReference.Handle(this.owner,this.name,this.desc),this.calledMethods);
-            super.visitCode();
-        }
-
-        @Override
-        public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-            this.calledMethods.add(new MethodReference.Handle(owner,name,descriptor));
-            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
         }
     }
 

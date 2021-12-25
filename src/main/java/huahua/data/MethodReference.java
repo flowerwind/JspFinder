@@ -83,4 +83,26 @@ public class MethodReference {
             return result;
         }
     }
+
+    public static class Factory implements DataFactory<MethodReference> {
+
+        @Override
+        public MethodReference parse(String[] fields) {
+            return new MethodReference(
+                    fields[0],
+                    fields[1],
+                    fields[2],
+                    Boolean.parseBoolean(fields[3]));
+        }
+
+        @Override
+        public String[] serialize(MethodReference obj) {
+            return new String[] {
+                    obj.getOwner(),
+                    obj.name,
+                    obj.desc,
+                    Boolean.toString(obj.isStatic),
+            };
+        }
+    }
 }

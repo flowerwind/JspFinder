@@ -9,12 +9,9 @@ public class Command {
     @Parameter(names = {"-f", "--file"}, description = "指定web目录下的某个文件")
     public String file;
 
-//    @Parameter(names = {"-m", "--module"}, description = "Scan Module")
-//    public String module;
-@Parameter(names = {"-d","--webDir"}, description = "web目录")
-public String webDir;
-
+    @Parameter(names = {"-d", "--webDir"}, description = "web目录")
+    public String webDir;
 
     @Parameter(names = {"--debug"}, description = "Debug")
-    public boolean debug;
+    public boolean debug=false;
 }
