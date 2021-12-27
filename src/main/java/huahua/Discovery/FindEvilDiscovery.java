@@ -210,6 +210,8 @@ public class FindEvilDiscovery {
                 boolean subString = owner.equals("java/lang/String") && name.equals("substring");
                 boolean classCallMethod = owner.equals("java/lang/Class") && (name.equals("getMethod") || name.equals("getConstructors") || name.equals("getConstructor") || name.equals("getDeclaredConstructors") || name.equals("getDeclaredConstructor") || name.equals("getDeclaredMethod"));
                 boolean decodeBuffer = name.equals("decodeBuffer") && owner.equals("sun/misc/BASE64Decoder") && desc.equals("(Ljava/lang/String;)[B");
+                boolean jdk8DecodeString= owner.equals("java/util/Base64$Decoder") && name.equals("decode") && desc.equals("(Ljava/lang/String;)[B");
+                boolean jdk8DecodeBytes= owner.equals("java/util/Base64$Decoder") && name.equals("decode") && desc.equals("([B)[B");
                 boolean exec = name.equals("exec") && owner.equals("java/lang/Runtime") & desc.contains("Ljava/lang/Process");     //把desc修改为包含返回值为Process的即为发现Runtime.exec方法，这样可以同时检测到重载的几个方法
                 boolean append = name.equals("append") &&
                         owner.equals("java/lang/StringBuilder") &&
@@ -268,7 +270,7 @@ public class FindEvilDiscovery {
                     super.visitMethodInsn(opcode, owner, name, desc, itf);
                     return;
                 }
-                if (decodeBuffer) {
+                if (decodeBuffer || jdk8DecodeString) {
                     String encodeString = "";
                     Set taintList = operandStack.get(0);
                     int taintNum = -1;
@@ -276,7 +278,7 @@ public class FindEvilDiscovery {
                         taintNum++;
                         if (taint instanceof String) {
                             encodeString = (String) taint;
-                            break;                     //todo 新添加的，待测试
+                            break;
                         } else if (taint instanceof Integer) {
                             super.visitMethodInsn(opcode, owner, name, desc, itf);
                             operandStack.get(0).addAll(taintList);
@@ -294,6 +296,30 @@ public class FindEvilDiscovery {
                         newTaintList.set(taintNum, decodeString);
                         super.visitMethodInsn(opcode, owner, name, desc, itf);
                         operandStack.get(0).addAll(newTaintList);
+                        return;
+                    }
+                }
+                if(jdk8DecodeBytes){
+                    Set taintList = operandStack.get(0);
+                    for (Object taint : operandStack.get(0)) {
+                        //获取Opcodes.BIPUSH存放进来的byte数组然后还原原貌，主应对new String(byte[])这种情况，把byte[]还原成String进行污点传递
+                        if (taint instanceof ArrayList) {
+                            int len = ((ArrayList) taint).size();
+                            byte[] tmp = new byte[len];
+                            for (int i = 0; i < len; i++) {
+                                tmp[i] = (byte) (int) (((ArrayList) taint).get(i));
+                            }
+                            super.visitMethodInsn(opcode, owner, name, desc, itf);
+                            try {
+                                operandStack.get(0).add(new String(new sun.misc.BASE64Decoder().decodeBuffer(new String(tmp))));
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            return;
+                        }
+                        //如果不包含arrayList的byte数组，那么就正常传递污点
+                        super.visitMethodInsn(opcode, owner, name, desc, itf);
+                        operandStack.get(0).addAll(taintList);
                         return;
                     }
                 }
