@@ -89,14 +89,14 @@ public class main {
                     findEvilDiscovery.discover();
                     logger.info(webDir+"扫描结束");
 //                    System.out.println("* * * * * * * * * * * * * * * * *"+webDir+"扫描结束* * * * * * * * * * * * * * * * *");
-                    System.out.println("\r\n\r\n");
+                    System.out.println("\r\n");
                 }catch (java.io.FileNotFoundException e){
                     System.out.println("请求包jar包的根目录中包含Passthrough.dat文件");
                 } catch (Exception e){
                     e.printStackTrace();
                     logger.info(webDir+"编译出错");
 //                    System.out.println("- - - - - - - - - - - - - - - - -"+webDir+"编译出错"+"- - - - - - - - - - - - - - - - -");
-                    System.out.println("\r\n\r\n");
+                    System.out.println("\r\n");
                 }
             }
             //保存检测结果

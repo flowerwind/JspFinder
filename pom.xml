@@ -19,9 +19,6 @@
                         <manifest>
                             <mainClass>huahua.main</mainClass>
                         </manifest>
-                        <manifestEntries>
-                            <Class-Path>lib/jspcp.jar</Class-Path>
-                        </manifestEntries>
                     </archive>
                 </configuration>
             </plugin>
