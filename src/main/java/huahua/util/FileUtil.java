@@ -3,6 +3,7 @@ package huahua.util;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class FileUtil {
     public static void mkAndClearJspCompile(){
@@ -31,6 +32,10 @@ public class FileUtil {
     public static void getAllFileName(String path, ArrayList<String> fileNameList)
     {
         File file = new File(path);
+        if(!file.isDirectory()){
+            fileNameList.add(file.getAbsolutePath());
+            return ;
+        }
         File [] files = file.listFiles();
         for(File a:files)
         {
@@ -56,11 +61,22 @@ public class FileUtil {
         return classFileNameList;
     }
 
-    public static void main(String args[]){
-        ArrayList<String> filenameList=new ArrayList<String>();
-        ArrayList<String> classFileNameList =getAllClassFileName("JspCompile",filenameList);
-        for(String filename:classFileNameList){
-            System.out.println(filename);
+    public static void getJarFilePath(String path,ArrayList<String> jarFilePath){
+        ArrayList<String> filePathList=new ArrayList();
+        getAllFileName(path,filePathList);
+        for(String filePath:filePathList){
+            int point=filePath.lastIndexOf(".");
+            if (filePath.substring(point).equals(".jar")){
+                jarFilePath.add(filePath);
+            }
         }
     }
+
+//    public static void main(String args[]){
+//        ArrayList<String> filenameList=new ArrayList<String>();
+//        ArrayList<String> classFileNameList =getAllClassFileName("JspCompile",filenameList);
+//        for(String filename:classFileNameList){
+//            System.out.println(filename);
+//        }
+//    }
 }

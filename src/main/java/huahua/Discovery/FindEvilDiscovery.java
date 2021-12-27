@@ -495,6 +495,4 @@ public class FindEvilDiscovery {
         }
     }
 
-    public static void main(String args[]) {
-    }
 }

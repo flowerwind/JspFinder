@@ -6,7 +6,27 @@
 
     <groupId>org.example</groupId>
     <artifactId>JspFinder</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                    <archive>
+                        <manifest>
+                            <mainClass>huahua.main</mainClass>
+                        </manifest>
+                        <manifestEntries>
+                            <Class-Path>lib/jspcp.jar</Class-Path>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
@@ -61,7 +81,16 @@
             <groupId>javax.servlet</groupId>
             <artifactId>javax.servlet-api</artifactId>
             <version>4.0.1</version>
-            <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>jspcp</groupId>
+            <artifactId>jspcp</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/jspcp.jar</systemPath>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.tomcat/jasper -->
+
+
     </dependencies>
 </project>

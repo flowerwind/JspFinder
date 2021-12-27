@@ -15,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 //首先按照逆拓扑排序，把类中方法的调用进行排序
@@ -37,6 +36,7 @@ public class main {
         Constant.debug=command.debug;
         start(command);
     }
+
     private static void start(Command command) throws IOException {
 
             Set<String> webDirSet=new HashSet<String>();
@@ -54,13 +54,23 @@ public class main {
                     jspc.setUriroot(webDir);
                     FileUtil.mkAndClearJspCompile();
                     jspc.setOutputDir("JspCompile");
+                    ArrayList<String> jarFilePath=new ArrayList();
+                    if(command.classPath!=null){
+                        FileUtil.getJarFilePath(command.classPath,jarFilePath);
+                        String classPath=null;
+                        for(String jarFileName:jarFilePath){
+                            classPath=classPath+File.pathSeparator+jarFileName;
+                        }
+                        jspc.setClassPath(classPath);
+                    }
                     if (command.file != null) {
                         jspc.setJspFiles(command.file);
                     }
                     jspc.execute();
                     ArrayList<String> filenameList = new ArrayList<String>();
                     ArrayList<String> classFileNameList = FileUtil.getAllClassFileName("JspCompile", filenameList);
-                    System.out.println("*****************"+"开始扫描"+webDir+"*****************");
+                    logger.info("开始扫描"+webDir);
+//                    System.out.println("* * * * * * * * * * * * * * * * *"+"开始扫描"+webDir+"* * * * * * * * * * * * * * * * *");
                     for (String classFileName : classFileNameList) {
                         //形成class文件和byte[]文件内容的对应
                         byte[] classData = Files.readAllBytes(Paths.get(classFileName));
@@ -77,9 +87,16 @@ public class main {
                     passthroughDiscovery.discover();
                     FindEvilDiscovery findEvilDiscovery = new FindEvilDiscovery();
                     findEvilDiscovery.discover();
-                    System.out.println("*****************"+webDir+"扫描结束*****************");
-                }catch (Exception e){
-                    System.out.println("-----------------"+webDir+"编译出错"+"xxxxxxxxxxxxxxxxxxx");
+                    logger.info(webDir+"扫描结束");
+//                    System.out.println("* * * * * * * * * * * * * * * * *"+webDir+"扫描结束* * * * * * * * * * * * * * * * *");
+                    System.out.println("\r\n\r\n");
+                }catch (java.io.FileNotFoundException e){
+                    System.out.println("请求包jar包的根目录中包含Passthrough.dat文件");
+                } catch (Exception e){
+                    e.printStackTrace();
+                    logger.info(webDir+"编译出错");
+//                    System.out.println("- - - - - - - - - - - - - - - - -"+webDir+"编译出错"+"- - - - - - - - - - - - - - - - -");
+                    System.out.println("\r\n\r\n");
                 }
             }
             //保存检测结果

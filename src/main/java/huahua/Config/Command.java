@@ -17,4 +17,7 @@ public class Command {
 
     @Parameter(names = {"-s", "--save"}, description = "指定结果存放的文件名")
     public String savePath="result.txt";
+
+    @Parameter(names = {"-cp", "--classpath"}, description = "指定容器的依赖jar包(tomcat例为:D:\\apache-tomcat-8.0.50\\lib)")
+    public String classPath;
 }
