@@ -28,8 +28,8 @@ public class PassthroughDiscovery {
 
     private  void discoverMethodCalls(){
         Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls;
-        for (String classFileName: Constant.classNameToByte.keySet()){
-            byte[] classByte=Constant.classNameToByte.get(classFileName);
+        for (String classFileName: Constant.classFileNameToByte.keySet()){
+            byte[] classByte=Constant.classFileNameToByte.get(classFileName);
             ClassReader cr = new ClassReader(classByte);
             MethodCallDiscoveryClassVisitor methodCallDiscoveryClassVisitor=new MethodCallDiscoveryClassVisitor();
             cr.accept(methodCallDiscoveryClassVisitor,ClassReader.EXPAND_FRAMES);
@@ -39,8 +39,11 @@ public class PassthroughDiscovery {
     }
 
     private void SortMethodCalls(){
+        Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls=new HashMap<>();
         for(String classFileName:classFileNameToMethodCalls.keySet()){
-            Map<MethodReference.Handle, Set<MethodReference.Handle>> methodCalls =classFileNameToMethodCalls.get(classFileName);
+            Map<MethodReference.Handle, Set<MethodReference.Handle>> tmpMethodCalls =classFileNameToMethodCalls.get(classFileName);
+            methodCalls.putAll(tmpMethodCalls);
+        }
             Map<MethodReference.Handle, Set<MethodReference.Handle>> outgoingReferences = new HashMap<>();
             for (Map.Entry<MethodReference.Handle, Set<MethodReference.Handle>> entry : methodCalls.entrySet()) {
                 MethodReference.Handle method = entry.getKey();
@@ -58,8 +61,8 @@ public class PassthroughDiscovery {
                 dfsTsort(outgoingReferences, sortedMethods, visitedNodes, dfsStack, root);
             }
             logger.debug(String.format("Outgoing references %d, sortedMethods %d", outgoingReferences.size(), sortedMethods.size()));
-            Constant.classFileNameToSortedMethodCalls.put(classFileName,sortedMethods);
-        }
+            Constant.sortedMethodCalls.addAll(sortedMethods);
+
     }
 
     public static Map<MethodReference.Handle, Set<Integer>> load() throws IOException, ClassNotFoundException {
@@ -141,15 +144,13 @@ public class PassthroughDiscovery {
         }else{
             passthroughDataflow=Constant.passthroughDataflow;
         }
-        for(String  classFileName:Constant.classFileNameToSortedMethodCalls.keySet()){
-            List<MethodReference.Handle> methodCalls=Constant.classFileNameToSortedMethodCalls.get(classFileName);
-            for(MethodReference.Handle methodToVisit:methodCalls){
-                byte[] classByte=Constant.classNameToByte.get(classFileName);
+            for(MethodReference.Handle methodToVisit:Constant.sortedMethodCalls){
+                byte[] classByte=Constant.classNameToByte.get(methodToVisit.getOwner().substring(methodToVisit.getOwner().lastIndexOf("/")+1));
                 ClassReader cr=new ClassReader(classByte);
                 PassthroughDataflowClassVisitor passthroughDataflowClassVisitor=new PassthroughDataflowClassVisitor(passthroughDataflow,Opcodes.ASM6,methodToVisit);
                 cr.accept(passthroughDataflowClassVisitor,ClassReader.EXPAND_FRAMES);
             }
-        }
+
         Constant.passthroughDataflow=passthroughDataflow;
     }
 

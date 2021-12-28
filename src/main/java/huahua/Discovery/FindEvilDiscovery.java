@@ -6,6 +6,7 @@ import huahua.data.MethodReference;
 import org.apache.log4j.Logger;
 import org.objectweb.asm.*;
 import org.objectweb.asm.commons.JSRInlinerAdapter;
+import org.omg.PortableInterceptor.INACTIVE;
 
 import java.io.IOException;
 import java.util.*;
@@ -19,15 +20,14 @@ public class FindEvilDiscovery {
 
     private void findEvilDataflow() {
         final Map<MethodReference.Handle, Map<String,Set<Integer>>> EvilDataflow = new HashMap<>();
-        for (String classFileName : Constant.classFileNameToSortedMethodCalls.keySet()) {
-            List<MethodReference.Handle> methodCalls = Constant.classFileNameToSortedMethodCalls.get(classFileName);
-            for (MethodReference.Handle methodToVisit : methodCalls) {
-                byte[] classByte = Constant.classNameToByte.get(classFileName);
+            for (MethodReference.Handle methodToVisit : Constant.sortedMethodCalls) {
+                String className=methodToVisit.getOwner().substring(methodToVisit.getOwner().lastIndexOf("/")+1);
+                byte[] classByte=Constant.classNameToByte.get(className);
                 ClassReader cr = new ClassReader(classByte);
-                FindEvilDataflowClassVisitor findEvilDataflowClassVisitor = new FindEvilDataflowClassVisitor(EvilDataflow, Opcodes.ASM6, methodToVisit, classFileName);
+                FindEvilDataflowClassVisitor findEvilDataflowClassVisitor = new FindEvilDataflowClassVisitor(EvilDataflow, Opcodes.ASM6, methodToVisit, Constant.classNameToClassFileName.get(className));
                 cr.accept(findEvilDataflowClassVisitor, ClassReader.EXPAND_FRAMES);
             }
-        }
+
 
     }
 
@@ -165,7 +165,6 @@ public class FindEvilDiscovery {
                         resultTaint = new HashSet<>();
                     }
 
-
                     //调用之前PassthroughDiscovery的污染结果，看当前调用到的类是否可以污染，如果可以污染把被哪个参数污染的结果传递下去
                     Set<Integer> passthrough = Constant.passthroughDataflow.get(new MethodReference.Handle(owner, name, desc));
                     if (passthrough != null && passthrough.size() > 0) {
@@ -189,10 +188,6 @@ public class FindEvilDiscovery {
                             }
                             toEvilTaint.put(evilType,taints);
                         }
-//                        for (Integer evilMethodDataflowArg : evilMethodDataflow) {
-//                            //表示argTaint.get(new Integer(evilMethodDataflowArg))里的那个值对应的参数能污染到危险方法
-//                            toEvilTaint.addAll(argTaint.get(new Integer(evilMethodDataflowArg)));
-//                        }
                         //如果大于0表示调用方法可以污染到被调用方法
                         if (toEvilTaint.size() > 0) {
                             for(String evilType:toEvilTaint.keySet()){
@@ -202,7 +197,12 @@ public class FindEvilDiscovery {
                                     //printEvilMessage中如果包含1，则表示该类已经被标记为webshell，并且已经输出告警。如果包含1的话则不要再重复输出告警了。
                                     if (!printEvilMessage.contains(1)) {
                                         printEvilMessage.add(1);
-                                        String msg=Constant.classNameToJspName.get(classFileName) + "   "+evilType+"可被request污染，该文件为webshell!!!";
+                                        String msg;
+                                        if(evilType.equals("Behinder")){
+                                            msg=Constant.classNameToJspName.get(classFileName)+"   该文件所调用的ClassLoader.defineClass可被request污染，疑似冰蝎webshell";
+                                        }else{
+                                            msg=Constant.classNameToJspName.get(classFileName) + "   "+evilType+"可被request污染，该文件为webshell!!!";
+                                        }
                                         logger.info(msg);
                                         Constant.evilClass.add(classFileName);
                                         Constant.msgList.add(msg);
@@ -391,6 +391,7 @@ public class FindEvilDiscovery {
                 boolean stringByteInit = owner.equals("java/lang/String") && name.equals("<init>") && (desc.equals("([B)V") || desc.equals("([BLjava/lang/String;)V"));
                 boolean stringInit = owner.equals("java/lang/String") && name.equals("<init>");
                 boolean stringBuilderInit = owner.equals("java/lang/StringBuilder") && name.equals("<init>") && desc.equals("(Ljava/lang/String;)V");
+                boolean defineClass=owner.equals("java/lang/ClassLoader") && name.equals("defineClass");
                 if (stringByteInit) {
                     Set taintList = operandStack.get(0);
                     for (Object taint : operandStack.get(0)) {
@@ -463,6 +464,35 @@ public class FindEvilDiscovery {
                     return;
                 }
 
+                //只要入参能流入到defineClass方法的第1号位置参数，1号参数是字节数组，就表示是个危险方法
+                if(defineClass){
+                    Type[] argumentTypes=Type.getArgumentTypes(desc);
+                    //operandStack.get(argumentTypes.length-1)表示取出defineClass第1号位置的污点集合
+                    if(operandStack.get(argumentTypes.length-1).size()>0){
+                        Set<Integer> taints=new HashSet<>();
+                        for (Object node : operandStack.get(argumentTypes.length-1)) {
+                            if (node instanceof Integer) {
+                                int taintNum = (Integer) node;
+                                if (Constant.debug) {
+                                    logger.info("ClassLoader的defineClass可被arg" + taintNum + "污染");
+                                }
+                                taints.add(taintNum);
+                                if (this.name.equals("_jspService")) {
+                                    if (!printEvilMessage.contains(1)) {
+                                        printEvilMessage.add(1);
+                                        String msg=Constant.classNameToJspName.get(classFileName) + "------ClassLoader的defineClass可受request控制，该文件为多功能webshell(冰蝎等)!!!";
+                                        logger.info(msg);
+                                        Constant.evilClass.add(classFileName);
+                                        Constant.msgList.add(msg);
+                                    }
+                                }
+                            }
+                        }
+                        toEvilTaint.put("Behinder",taints);
+                        super.visitMethodInsn(opcode, owner, name, desc, itf);
+                        return;
+                    }
+                }
             }
             if (opcode == Opcodes.INVOKESTATIC) {
                 boolean isValueOf = name.equals("valueOf") && desc.equals("(Ljava/lang/Object;)Ljava/lang/String;") && owner.equals("java/lang/String");

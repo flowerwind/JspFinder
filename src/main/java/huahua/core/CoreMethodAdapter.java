@@ -64,7 +64,7 @@ public class CoreMethodAdapter<T> extends MethodVisitor {
             { "javax/servlet/http/HttpServletRequest", "getHeader", "(Ljava/lang/String;)Ljava/lang/String;", 0 },
             { "javax/servlet/http/HttpServletRequest", "getHeaders", "(Ljava/lang/String;)Ljava/util/Enumeration;", 0 },
             { "javax/servlet/http/HttpServletRequest", "getHeaderNames", "()Ljava/util/Enumeration;", 0 },
-
+            { "javax/servlet/http/HttpServletRequest", "getReader", "()Ljava/io/BufferedReader;", 0 },
             //gadgetinspector默认查找的是反序列化的链，它认为每个方法的0参对象都是可以被控制的，但查找sql注入不一样，对于部分构造方法，需要自己明确哪个参数可以污染，要不然污点分析走不下去
             { "org/springframework/jdbc/core/JdbcTemplate$1QueryStatementCallback", "<init>", "(Lorg/springframework/jdbc/core/JdbcTemplate;Ljava/lang/String;Lorg/springframework/jdbc/core/ResultSetExtractor;)V", 2 },
 
@@ -90,6 +90,10 @@ public class CoreMethodAdapter<T> extends MethodVisitor {
             {"sun/misc/BASE64Encoder","encode","*",1},
             //gadgetinspector跑出来的append方法污染点只有0号参数，显然是不对的，这里添加白名单
             {"java/lang/StringBuilder","append","(Ljava/lang/String;)Ljava/lang/StringBuilder;",0,1},
+            //表示doFind()参数为空时候，没有污点
+            {"javax/crypto/Cipher","doFinal","()[B",-1},
+            {"javax/crypto/Cipher","doFinal","*",1},
+            {"java/io/BufferedReader","readLine","()Ljava/lang/String;",0},
     };
 
     public CoreMethodAdapter(final int api, final MethodVisitor mv, final String owner, int access,
@@ -680,6 +684,7 @@ public class CoreMethodAdapter<T> extends MethodVisitor {
                         for (int i = 3; i < passthrough.length; i++) {
                             resultTaint.addAll(argTaint.get((Integer)passthrough[i]));
                         }
+                        break;
                     }
                 }
 

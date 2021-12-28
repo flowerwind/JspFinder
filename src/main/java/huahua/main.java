@@ -46,8 +46,8 @@ public class main {
                     //passthroughDataflow可以不用清除，passthroughDataflow清了要重新从磁盘读取一份，消耗资源，就算保留之前被分析的类的污染关系也无所谓，因为一般不会出现类名相同、方法名相同但方法内容不通的情况
                     Constant.evilClass.clear();
                     Constant.classNameToJspName.clear();
-                    Constant.classFileNameToSortedMethodCalls.clear();
-                    Constant.classNameToByte.clear();
+                    Constant.sortedMethodCalls.clear();
+                    Constant.classFileNameToByte.clear();
                     JspC jspc = new JspC();
                     jspc.setCompile(true);
                     jspc.setClassDebugInfo(false);
@@ -74,7 +74,12 @@ public class main {
                     for (String classFileName : classFileNameList) {
                         //形成class文件和byte[]文件内容的对应
                         byte[] classData = Files.readAllBytes(Paths.get(classFileName));
-                        Constant.classNameToByte.put(classFileName, classData);
+                        Constant.classFileNameToByte.put(classFileName, classData);
+                        //形成类名和byte[]文件内容的对应
+                        int endPoint=classFileName.indexOf(".class");
+                        int startPoint=classFileName.lastIndexOf(File.separator);
+                        Constant.classNameToByte.put(classFileName.substring(startPoint+1,endPoint),classData);
+                        Constant.classNameToClassFileName.put(classFileName.substring(startPoint+1,endPoint),classFileName);
                         //形成class文件和被扫描的jsp之间的对应
                         String rootPath = new File("JspCompile").getAbsolutePath() + File.separator + "org" + File.separator + "apache" + File.separator + "jsp";
                         String relativeJspClassName = EncodeUtil.reductionRelativePath(classFileName, rootPath);
@@ -100,7 +105,7 @@ public class main {
                 }
             }
             //删除编译文件
-            FileUtil.deleteDir(new File("JspCompile"));
+//            FileUtil.deleteDir(new File("JspCompile"));
             //保存检测结果
             saveResult(command.savePath);
 
