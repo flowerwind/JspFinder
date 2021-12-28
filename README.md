@@ -64,4 +64,4 @@ https://github.com/EmYiQing/JSPKiller
 
 https://github.com/threedr3am/gadgetinspector
 
-[![Stargazers over time](https://starchart.cc/flowerwind/JspFinder.svc)](https://starchart.cc/flowerwind/JspFinder) 
+[![Stargazers over time](https://starchart.cc/flowerwind/JspFinder.svg)](https://starchart.cc/flowerwind/JspFinder) 
