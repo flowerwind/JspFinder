@@ -62,6 +62,12 @@ maven编译完后会在target目录生成一个JspFinder-x.x.x-SNAPSHOT-jar-with
 
 得到的jar即可使用
 
+### 后续准备实现
+
+1、对冰蝎等多功能webshell进行检测
+
+2、对使用混淆工具进行混淆的webshell进行检测
+
 ### 参考
 
 https://github.com/EmYiQing/JSPKiller
