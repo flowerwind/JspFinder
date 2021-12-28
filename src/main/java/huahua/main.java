@@ -99,6 +99,8 @@ public class main {
                     System.out.println("\r\n");
                 }
             }
+            //删除编译文件
+            FileUtil.deleteDir(new File("JspCompile"));
             //保存检测结果
             saveResult(command.savePath);
 
