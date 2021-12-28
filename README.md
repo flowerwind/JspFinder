@@ -36,7 +36,7 @@ Usage: <main class> [options]
 java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境\apache-tomcat-8.0.50-windows-x64\apache-tomcat-8.0.50  -cp D:\tomcat环境\apache-tomcat-8.0.50-windows-x64\apache-tomcat-8.0.50\lib
 ```
 
-![image-20211228110711534](img\image-20211228110711534.png)
+![image-20211228110711534](img/image-20211228110711534.png)
 
 ### 编译
 
@@ -44,17 +44,17 @@ java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境
 mvn assembly:assembly
 ```
 
-![image-20211228113256419](img\image-20211228113256419.png)
+![image-20211228113256419](img/image-20211228113256419.png)
 
 maven编译完后会在target目录生成一个JspFinder-x.x.x-SNAPSHOT-jar-with-dependencies.jar。
 
 然后到项目目录中的lib目录解压jspcp.jar
 
-![image-20211228113554145](img\image-20211228113554145.png)
+![image-20211228113554145](img/image-20211228113554145.png)
 
 用压缩工具打开JspFinder-x.x.x-SNAPSHOT-jar-with-dependencies.jar，将jspcp文件夹中的javax、org两个目录拖到jar中。
 
-![image-20211228113808020](img\image-20211228113808020.png)
+![image-20211228113808020](img/image-20211228113808020.png)
 
 得到的jar即可使用
 
