@@ -38,6 +38,10 @@ java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境
 
 ![image-20211228110711534](img/image-20211228110711534.png)
 
+### 测试webshell
+
+https://github.com/LandGrey/webshell-detect-bypass/tree/master/webshell/jsp
+
 ### 编译
 
 ```
