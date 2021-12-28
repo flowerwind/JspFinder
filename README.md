@@ -40,7 +40,7 @@ java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境
 
 检测冰蝎webshell效果
 
-![image-20211229000037399](D:\java代码\JspFinder\README\image-20211229000037399.png)
+![image-20211229000037399](img/image-20211229000037399.png)
 
 ### 测试webshell
 
