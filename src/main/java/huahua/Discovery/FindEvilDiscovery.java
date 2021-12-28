@@ -18,7 +18,7 @@ public class FindEvilDiscovery {
     }
 
     private void findEvilDataflow() {
-        final Map<MethodReference.Handle, Set<Integer>> EvilDataflow = new HashMap<>();
+        final Map<MethodReference.Handle, Map<String,Set<Integer>>> EvilDataflow = new HashMap<>();
         for (String classFileName : Constant.classFileNameToSortedMethodCalls.keySet()) {
             List<MethodReference.Handle> methodCalls = Constant.classFileNameToSortedMethodCalls.get(classFileName);
             for (MethodReference.Handle methodToVisit : methodCalls) {
@@ -33,13 +33,13 @@ public class FindEvilDiscovery {
 
     private class FindEvilDataflowClassVisitor extends ClassVisitor {
         private FindEvilDataflowMethodVisitor findEvilDataflowMethodVisitor;
-        private final Map<MethodReference.Handle, Set<Integer>> EvilDataflow;
+        private final Map<MethodReference.Handle, Map<String,Set<Integer>>> EvilDataflow;
         private final MethodReference.Handle methodToVisit;
         private String name;
         private String classFileName;
         private Set printEvilMessage = new HashSet();
 
-        public FindEvilDataflowClassVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow, int api, MethodReference.Handle methodToVisit, String classFileName) {
+        public FindEvilDataflowClassVisitor(Map<MethodReference.Handle, Map<String,Set<Integer>>> EvilDataflow, int api, MethodReference.Handle methodToVisit, String classFileName) {
             super(api);
             this.EvilDataflow = EvilDataflow;
             this.methodToVisit = methodToVisit;
@@ -69,7 +69,7 @@ public class FindEvilDiscovery {
             return super.visitMethod(access, name, descriptor, signature, exceptions);
         }
 
-        public Set<Integer> getReturnTaint() {
+        public Map<String,Set<Integer>> getReturnTaint() {
             if (findEvilDataflowMethodVisitor == null) {
                 throw new IllegalStateException("Never constructed the passthroughDataflowmethodVisitor!");
             }
@@ -78,8 +78,8 @@ public class FindEvilDiscovery {
     }
 
     private class FindEvilDataflowMethodVisitor extends CoreMethodAdapter {
-        private final Set<Integer> toEvilTaint;//被污染的返回数据
-        private final Map<MethodReference.Handle, Set<Integer>> EvilDataflow;
+        private final Map<String,Set<Integer>> toEvilTaint;//被污染的返回数据,key的值为恶意类的类型，比如:Runtime/ProcessBuilder/Behinder
+        private final Map<MethodReference.Handle, Map<String,Set<Integer>>> EvilDataflow;
         private final int access;
         private final String desc;
         private final String owner;
@@ -88,10 +88,10 @@ public class FindEvilDiscovery {
         private String classFileName;
         private Set printEvilMessage;
 
-        public FindEvilDataflowMethodVisitor(Map<MethodReference.Handle, Set<Integer>> EvilDataflow, int api, int access, String desc, MethodVisitor mv, String owner, String name, String signature, String[] exceptions, String classFileName, Set printEvilMessage) {
+        public FindEvilDataflowMethodVisitor(Map<MethodReference.Handle, Map<String,Set<Integer>>> EvilDataflow, int api, int access, String desc, MethodVisitor mv, String owner, String name, String signature, String[] exceptions, String classFileName, Set printEvilMessage) {
             super(api, mv, owner, access, name, desc, signature, exceptions);
             this.EvilDataflow = EvilDataflow;
-            this.toEvilTaint = new HashSet<>();
+            this.toEvilTaint = new HashMap<>();
             this.access = access;
             this.desc = desc;
             this.owner = owner;
@@ -175,28 +175,43 @@ public class FindEvilDiscovery {
                     }
 
                     // 前面已做逆拓扑，调用链最末端最先被visit，因此，调用到的方法必然已被visit分析过
-                    Set<Integer> evilMethodDataflow = EvilDataflow.get(new MethodReference.Handle(owner, name, desc));
+                    Map<String,Set<Integer>> evilMethodDataflow = EvilDataflow.get(new MethodReference.Handle(owner, name, desc));
                     if (evilMethodDataflow != null && evilMethodDataflow.size() > 0) {
-                        for (Integer evilMethodDataflowArg : evilMethodDataflow) {
-                            //表示argTaint.get(new Integer(evilMethodDataflowArg))里的那个值对应的参数能污染到危险方法
-                            toEvilTaint.addAll(argTaint.get(new Integer(evilMethodDataflowArg)));
-                        }
-                        //如果大于0表示调用方法可以污染到被调用方法
-                        if (toEvilTaint.size() > 0) {
-                            // 如果调用方法为_jspService，并且污染值在第一位(request参数是_jspService方法第一位，说明恶意类可以被request污染--也就是攻击者可控)
-                            if (this.name.equals("_jspService") && toEvilTaint.contains(1)) {
-                                //printEvilMessage中如果包含1，则表示该类已经被标记为webshell，并且已经输出告警。如果包含1的话则不要再重复输出告警了。
-                                if (!printEvilMessage.contains(1)) {
-                                    printEvilMessage.add(1);
-                                    String msg=Constant.classNameToJspName.get(classFileName) + "恶意类如(Runtime、ProcessBuilder)可被request污染，该文件为webshell!!!";
-                                    logger.info(msg);
-                                    Constant.evilClass.add(classFileName);
-                                    Constant.msgList.add(msg);
+                        for(String evilType:evilMethodDataflow.keySet()){
+                            Set<Integer> taints=new HashSet<>();
+                            Set<Integer> evilMethodDataflowArgList=evilMethodDataflow.get(evilType);
+                            if (evilMethodDataflowArgList!=null && evilMethodDataflowArgList.size()>0){
+                                for (Integer evilMethodDataflowArg : evilMethodDataflowArgList) {
+                                    //表示argTaint.get(new Integer(evilMethodDataflowArg))里的那个值对应的参数能污染到危险方法
+                                    Set<Integer> tmpTaints=argTaint.get(evilMethodDataflowArg);
+                                    taints.addAll(tmpTaints);
                                 }
                             }
-                            if (Constant.debug) {
-                                logger.info("类:" + this.owner + "方法:" + this.name + "调用到被污染方法:" + name);
-                                logger.info("污染点为:" + toEvilTaint);
+                            toEvilTaint.put(evilType,taints);
+                        }
+//                        for (Integer evilMethodDataflowArg : evilMethodDataflow) {
+//                            //表示argTaint.get(new Integer(evilMethodDataflowArg))里的那个值对应的参数能污染到危险方法
+//                            toEvilTaint.addAll(argTaint.get(new Integer(evilMethodDataflowArg)));
+//                        }
+                        //如果大于0表示调用方法可以污染到被调用方法
+                        if (toEvilTaint.size() > 0) {
+                            for(String evilType:toEvilTaint.keySet()){
+                                Set<Integer> tains=toEvilTaint.get(evilType);
+                                // 如果调用方法为_jspService，并且污染值在第一位(request参数是_jspService方法第一位，说明恶意类可以被request污染--也就是攻击者可控)
+                                if (this.name.equals("_jspService") && tains.contains(1)) {
+                                    //printEvilMessage中如果包含1，则表示该类已经被标记为webshell，并且已经输出告警。如果包含1的话则不要再重复输出告警了。
+                                    if (!printEvilMessage.contains(1)) {
+                                        printEvilMessage.add(1);
+                                        String msg=Constant.classNameToJspName.get(classFileName) + "   "+evilType+"可被request污染，该文件为webshell!!!";
+                                        logger.info(msg);
+                                        Constant.evilClass.add(classFileName);
+                                        Constant.msgList.add(msg);
+                                    }
+                                }
+                                if (Constant.debug) {
+                                    logger.info("类:" + this.owner + "方法:" + this.name + "调用到被污染方法:" + name);
+                                    logger.info("污染点为:" + tains);
+                                }
                             }
                         }
                     }
@@ -324,26 +339,30 @@ public class FindEvilDiscovery {
                     }
                 }
                 if (exec) {
-                    for (Object node : operandStack.get(0)) {
-                        if (node instanceof Integer) {
-                            int taintNum = (Integer) node;
-                            if (Constant.debug) {
-                                logger.info("Runtime.exec可被arg" + taintNum + "污染");
-                            }
-                            if (this.name.equals("_jspService")) {
-                                if (!printEvilMessage.contains(1)) {
-                                    printEvilMessage.add(1);
-                                    String msg=Constant.classNameToJspName.get(classFileName) + "------Runtime.exec可受request控制，该文件为webshell!!!";
-                                    logger.info(msg);
-                                    Constant.evilClass.add(classFileName);
-                                    Constant.msgList.add(msg);
+                    if(operandStack.get(0).size()>0){
+                        Set<Integer> taints=new HashSet<>();
+                        for (Object node : operandStack.get(0)) {
+                            if (node instanceof Integer) {
+                                int taintNum = (Integer) node;
+                                if (Constant.debug) {
+                                    logger.info("Runtime.exec可被arg" + taintNum + "污染");
+                                }
+                                taints.add(taintNum);
+                                if (this.name.equals("_jspService")) {
+                                    if (!printEvilMessage.contains(1)) {
+                                        printEvilMessage.add(1);
+                                        String msg=Constant.classNameToJspName.get(classFileName) + "------Runtime.exec可受request控制，该文件为webshell!!!";
+                                        logger.info(msg);
+                                        Constant.evilClass.add(classFileName);
+                                        Constant.msgList.add(msg);
+                                    }
                                 }
                             }
-                            //将能够流入到Runtime.exec方法中的入参标记为污染点
-                            toEvilTaint.add(taintNum);
-                            super.visitMethodInsn(opcode, owner, name, desc, itf);
-                            return;
                         }
+                        //将能够流入到Runtime.exec方法中的入参标记为污染点
+                        toEvilTaint.put("Runtime",taints);
+                        super.visitMethodInsn(opcode, owner, name, desc, itf);
+                        return;
                     }
                 }
                 if (append && (operandStack.get(0).size() > 0 || operandStack.get(1).size() > 0)) {
@@ -411,25 +430,29 @@ public class FindEvilDiscovery {
                     return;
                 }
                 if (processBuilderInit) {
-                    for (Object node : operandStack.get(0)) {
-                        if (node instanceof Integer) {
-                            int taintNum = (Integer) node;
-                            if (Constant.debug) {
-                                logger.info("ProcessBuilder可被arg" + taintNum + "污染");
-                            }
-                            if (this.name.equals("_jspService")) {
-                                if (!printEvilMessage.contains(1)) {
-                                    printEvilMessage.add(1);
-                                    String msg=Constant.classNameToJspName.get(classFileName) + "------ProcessBuilder可受request控制，该文件为webshell!!!";
-                                    logger.info(msg);
-                                    Constant.evilClass.add(classFileName);
-                                    Constant.msgList.add(msg);
+                    if(operandStack.get(0).size()>0){
+                        Set<Integer> taints=new HashSet<>();
+                        for (Object node : operandStack.get(0)) {
+                            if (node instanceof Integer) {
+                                int taintNum = (Integer) node;
+                                if (Constant.debug) {
+                                    logger.info("ProcessBuilder可被arg" + taintNum + "污染");
+                                }
+                                taints.add(taintNum);
+                                if (this.name.equals("_jspService")) {
+                                    if (!printEvilMessage.contains(1)) {
+                                        printEvilMessage.add(1);
+                                        String msg=Constant.classNameToJspName.get(classFileName) + "------ProcessBuilder可受request控制，该文件为webshell!!!";
+                                        logger.info(msg);
+                                        Constant.evilClass.add(classFileName);
+                                        Constant.msgList.add(msg);
+                                    }
                                 }
                             }
-                            toEvilTaint.add(taintNum);
-                            super.visitMethodInsn(opcode, owner, name, desc, itf);
-                            return;
                         }
+                        toEvilTaint.put("ProcessBuilder",taints);
+                        super.visitMethodInsn(opcode, owner, name, desc, itf);
+                        return;
                     }
                 }
 
