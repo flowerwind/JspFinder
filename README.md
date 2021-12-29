@@ -7,7 +7,7 @@
 
 ### 简介
 
-受[4ra1n](https://github.com/EmYiQing)师傅的[JSPKiller](https://github.com/EmYiQing/JSPKiller)项目的启发，开发的一款可实战的，通过污点追踪发现Jsp webshell的工具(A tool to find Jsp Webshell through stain tracking) 。污点跟踪的实现方式为将jsp编译为class后，通过java代码为class中的方法设置污点，然后模拟jvm堆栈的运行，查看污点能否流入危险方法，如:Runtime.exec、ProcessBuilder。这个过程不和web服务器有任何的挂钩和侵入，完全是独立行为，所以该检测方式不会影响服务器，可以在服务器上放心使用。具体原理已经放在了先知上，等文章审核通过后会更新出文章链接。目前可以检测Runtime/ProcessBuilder/冰蝎的webshell。
+受[4ra1n](https://github.com/EmYiQing)师傅的[JSPKiller](https://github.com/EmYiQing/JSPKiller)项目的启发，开发的一款可实战的，通过污点追踪发现Jsp webshell的工具(A tool to find Jsp Webshell through stain tracking) 。污点跟踪的实现方式为将jsp编译为class后，通过java代码为class中的方法设置污点，然后模拟jvm堆栈的运行，查看污点能否流入危险方法，如:Runtime.exec、ProcessBuilder。这个过程不和web服务器有任何的挂钩和侵入，完全是独立行为，所以该检测方式不会影响服务器，可以在服务器上放心使用。具体原理已经放在了先知上，等文章审核通过后会更新出文章链接。目前可以检测Runtime/ProcessBuilder/冰蝎/哥斯拉/天蝎的webshell。
 
 ### 使用
 
@@ -46,9 +46,19 @@ java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境
 
 ![image-20211229120025794](img/image-20211229120025794.png)
 
+检测天蝎效果(普通类型和bypass类型)
+
+![image-20211229150428452](img/image-20211229150428452.png)
+
 ### 测试webshell
 
 https://github.com/LandGrey/webshell-detect-bypass/tree/master/webshell/jsp
+
+https://github.com/rebeyond/Behinder
+
+https://github.com/BeichenDream/Godzilla
+
+https://github.com/shack2/skyscorpion
 
 ### 编译
 

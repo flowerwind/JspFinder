@@ -72,6 +72,17 @@ public class FileUtil {
         }
     }
 
+    public static void getJspFilePath(String path,ArrayList<String> jarFilePath){
+        ArrayList<String> filePathList=new ArrayList();
+        getAllFileName(path,filePathList);
+        for(String filePath:filePathList){
+            int point=filePath.lastIndexOf(".");
+            if (filePath.substring(point).equals(".jsp") || filePath.substring(point).equals(".jspx")){
+                jarFilePath.add(filePath);
+            }
+        }
+    }
+
 //    public static void main(String args[]){
 //        ArrayList<String> filenameList=new ArrayList<String>();
 //        ArrayList<String> classFileNameList =getAllClassFileName("JspCompile",filenameList);

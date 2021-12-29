@@ -128,20 +128,20 @@ public class FindEvilDiscovery {
             //获取返回值类型大小
             int retSize = Type.getReturnType(desc).getSize();
             Set<Integer> resultTaint;
+            //非静态方法需要把实例类型放在第一个元素
+            if (opcode != Opcodes.INVOKESTATIC) {
+                Type[] extendedArgTypes = new Type[argTypes.length + 1];
+                System.arraycopy(argTypes, 0, extendedArgTypes, 1, argTypes.length);
+                extendedArgTypes[0] = Type.getObjectType(owner);
+                argTypes = extendedArgTypes;
+            }
+            final List<Set<Integer>> argTaint = new ArrayList<Set<Integer>>(argTypes.length);
             switch (opcode) {
                 case Opcodes.INVOKESTATIC:
                 case Opcodes.INVOKEINTERFACE:
                 case Opcodes.INVOKEVIRTUAL:
                 case Opcodes.INVOKESPECIAL:
                     //todo 处理调用恶意方法的情况
-                    //非静态方法需要把实例类型放在第一个元素
-                    if (opcode != Opcodes.INVOKESTATIC) {
-                        Type[] extendedArgTypes = new Type[argTypes.length + 1];
-                        System.arraycopy(argTypes, 0, extendedArgTypes, 1, argTypes.length);
-                        extendedArgTypes[0] = Type.getObjectType(owner);
-                        argTypes = extendedArgTypes;
-                    }
-                    final List<Set<Integer>> argTaint = new ArrayList<Set<Integer>>(argTypes.length);
                     for (int i = 0; i < argTypes.length; i++) {
                         argTaint.add(null);
                     }
@@ -199,7 +199,7 @@ public class FindEvilDiscovery {
                                         printEvilMessage.add(1);
                                         String msg;
                                         if(evilType.equals("Behinder")){
-                                            msg=Constant.classNameToJspName.get(classFileName)+"   该文件所调用的ClassLoader.defineClass可被request污染，疑似冰蝎/哥斯拉webshell";
+                                            msg=Constant.classNameToJspName.get(classFileName)+"------该文件所调用的ClassLoader.defineClass可被request污染，疑似冰蝎/哥斯拉/天蝎webshell";
                                         }else{
                                             msg=Constant.classNameToJspName.get(classFileName) + "   "+evilType+"可被request污染，该文件为webshell!!!";
                                         }
@@ -234,6 +234,7 @@ public class FindEvilDiscovery {
                 boolean toString = name.equals("toString") && owner.equals("java/lang/StringBuilder") && desc.equals("()Ljava/lang/String;");
                 //这个方法比较特殊，他的污点传递是从实体类传到入参的第一个参数中，所以这里要对他特殊处理
                 boolean inputStream=owner.equals("java/io/InputStream") && name.equals("read") && desc.equals("([BII)I");
+                boolean methodInvoke=owner.equals("java/lang/reflect/Method") && name.equals("invoke") && desc.equals("(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;");
                 if (subString) {
                     int k = 0;
                     Set listAll = new HashSet();
@@ -400,6 +401,34 @@ public class FindEvilDiscovery {
                         }
                     }
                 }
+
+                if(methodInvoke){
+                    //表示取出method类实例上的污点
+                    Set taints=argTaint.get(0);
+                    if(taints.size()>0){
+                        for(Object taint:taints){
+                            if(taint instanceof String && ((String)taint).equals("defineClass")){
+                                //表示取出被调用方法也就是invoke的第二个参数
+                                Set tmpTaints=argTaint.get(2);
+                                Set<Integer> numTains=new HashSet<>();
+                                for(Object tmpTaint:tmpTaints){
+                                    //表示入参可以污染到defineClass方法的参数
+                                    if (tmpTaint instanceof Integer){
+                                        if (!printEvilMessage.contains(1)) {
+                                            printEvilMessage.add(1);
+                                            String msg=Constant.classNameToJspName.get(classFileName) + "------defineClass方法反射调用后，参数可受request控制，该文件为冰蝎/哥斯拉/天蝎变种webshell";
+                                            logger.info(msg);
+                                            Constant.evilClass.add(classFileName);
+                                            Constant.msgList.add(msg);
+                                        }
+                                        numTains.add((Integer) tmpTaint);
+                                    }
+                                }
+                                toEvilTaint.put("Behinder",numTains);
+                            }
+                        }
+                    }
+                }
             }
             //调用构造方法
             if (opcode == Opcodes.INVOKESPECIAL) {
@@ -460,7 +489,7 @@ public class FindEvilDiscovery {
                                 if (this.name.equals("_jspService")) {
                                     if (!printEvilMessage.contains(1)) {
                                         printEvilMessage.add(1);
-                                        String msg=Constant.classNameToJspName.get(classFileName) + "------ProcessBuilder可受request控制，该文件为webshell!!!";
+                                        String msg=Constant.classNameToJspName.get(classFileName) + "   ProcessBuilder可受request控制，该文件为webshell!!!";
                                         logger.info(msg);
                                         Constant.evilClass.add(classFileName);
                                         Constant.msgList.add(msg);
