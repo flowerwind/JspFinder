@@ -98,6 +98,12 @@ maven编译完后会在target目录生成一个JspFinder-x.x.x-SNAPSHOT-jar-with
 
 3、对方法的入参能否影响返回值算法更精准的优化，提高准确率
 
+### 最近更新
+
+[+] 2021/12/28 新增冰蝎webshell检测。修复当出现内部类时，污点分析顺序出错的问题。新增分析完毕后删除编译文件的功能。新增maven配置，添加built-by参数，防止用户名被maven打包到jar中。
+
+[+] 2021/12/29 新增哥斯拉、天蝎webshell检测。新增jsp编译容错机制，一个jsp编译报错自动开始下一个。
+
 ### 参考
 
 https://github.com/EmYiQing/JSPKiller
