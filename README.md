@@ -42,6 +42,10 @@ java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境
 
 ![image-20211229000037399](img/image-20211229000037399.png)
 
+检测哥斯拉webshell效果(raw类型和base64类型)
+
+![image-20211229120025794](img/image-20211229120025794.png)
+
 ### 测试webshell
 
 https://github.com/LandGrey/webshell-detect-bypass/tree/master/webshell/jsp

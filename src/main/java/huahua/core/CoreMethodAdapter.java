@@ -94,6 +94,7 @@ public class CoreMethodAdapter<T> extends MethodVisitor {
             {"javax/crypto/Cipher","doFinal","()[B",-1},
             {"javax/crypto/Cipher","doFinal","*",1},
             {"java/io/BufferedReader","readLine","()Ljava/lang/String;",0},
+            { "javax/servlet/http/HttpServletRequest", "getInputStream", "()Ljavax/servlet/ServletInputStream;", 0 },
     };
 
     public CoreMethodAdapter(final int api, final MethodVisitor mv, final String owner, int access,

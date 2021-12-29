@@ -199,7 +199,7 @@ public class FindEvilDiscovery {
                                         printEvilMessage.add(1);
                                         String msg;
                                         if(evilType.equals("Behinder")){
-                                            msg=Constant.classNameToJspName.get(classFileName)+"   该文件所调用的ClassLoader.defineClass可被request污染，疑似冰蝎webshell";
+                                            msg=Constant.classNameToJspName.get(classFileName)+"   该文件所调用的ClassLoader.defineClass可被request污染，疑似冰蝎/哥斯拉webshell";
                                         }else{
                                             msg=Constant.classNameToJspName.get(classFileName) + "   "+evilType+"可被request污染，该文件为webshell!!!";
                                         }
@@ -232,6 +232,8 @@ public class FindEvilDiscovery {
                         owner.equals("java/lang/StringBuilder") &&
                         desc.equals("(Ljava/lang/String;)Ljava/lang/StringBuilder;");
                 boolean toString = name.equals("toString") && owner.equals("java/lang/StringBuilder") && desc.equals("()Ljava/lang/String;");
+                //这个方法比较特殊，他的污点传递是从实体类传到入参的第一个参数中，所以这里要对他特殊处理
+                boolean inputStream=owner.equals("java/io/InputStream") && name.equals("read") && desc.equals("([BII)I");
                 if (subString) {
                     int k = 0;
                     Set listAll = new HashSet();
@@ -382,6 +384,21 @@ public class FindEvilDiscovery {
                     super.visitMethodInsn(opcode, owner, name, desc, itf);
                     operandStack.get(0).addAll(taintList);
                     return;
+                }
+
+                if(inputStream){
+                    Type[] argumentTypes=Type.getArgumentTypes(desc);
+                    //operandStack.get(argumentTypes.length)表示取出实体类中的污点
+                    Set tains=operandStack.get(argumentTypes.length);
+                    if(tains.size()>0){
+                        Set tmpTaints=operandStack.get(argumentTypes.length-1);
+                        for(Object tmpTaint:tmpTaints){
+                            if(tmpTaint instanceof String && ((String)tmpTaint).indexOf("instruction")>-1){
+                                String localVariablesNum=((String) tmpTaint).substring(11);
+                                localVariables.get(new Integer(localVariablesNum)).addAll(tains);
+                            }
+                        }
+                    }
                 }
             }
             //调用构造方法
