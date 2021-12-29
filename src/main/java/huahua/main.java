@@ -108,7 +108,7 @@ public class main {
 
         }
         //删除编译文件
-//            FileUtil.deleteDir(new File("JspCompile"));
+            FileUtil.deleteDir(new File("JspCompile"));
         //保存检测结果
         saveResult(command.savePath);
 
