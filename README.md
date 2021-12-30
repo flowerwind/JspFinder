@@ -50,6 +50,10 @@ java -jar JspFinder-1.0.0-SNAPSHOT-jar-with-dependencies.jar -d  D:\tomcat环境
 
 ![image-20211229150428452](img/image-20211229150428452.png)
 
+检测ScriptEngine webshell效果
+
+![](img/image-20211230125327841.png)
+
 ### 测试webshell
 
 https://github.com/LandGrey/webshell-detect-bypass/tree/master/webshell/jsp
@@ -59,6 +63,8 @@ https://github.com/rebeyond/Behinder
 https://github.com/BeichenDream/Godzilla
 
 https://github.com/shack2/skyscorpion
+
+https://github.com/threedr3am/JSP-Webshells/blob/master/jsp/3/3.jsp
 
 ### 编译
 

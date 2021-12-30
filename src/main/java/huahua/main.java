@@ -65,6 +65,8 @@ public class main {
                     jspc.setCompile(true);
                     jspc.setClassDebugInfo(false);
                     jspc.setUriroot(webDir);
+                    jspc.setCompilerTargetVM("1.8");
+                    jspc.setCompilerSourceVM("1.8");
                     jspc.setOutputDir("JspCompile");
                     jspc.setClassPath(classPath);
                     if (command.file != null) {

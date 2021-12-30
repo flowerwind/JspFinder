@@ -219,6 +219,47 @@ public class FindEvilDiscovery {
                 default:
                     throw new IllegalStateException("Unexpected value: " + opcode);
             }
+
+            //调用接口方法
+            if(opcode == Opcodes.INVOKEINTERFACE){
+                boolean scriptEngineEval=owner.equals("javax/script/ScriptEngine") && name.equals("eval");
+                boolean scriptEnginePut=owner.equals("javax/script/ScriptEngine") && name.equals("put");
+                if(scriptEngineEval){
+                    Set taintList=argTaint.get(1);
+                    Set tmpTaintList=new HashSet();
+                    for (Object taint:taintList){
+                        if(taint instanceof Integer){
+                            if (!printEvilMessage.contains(1)) {
+                                printEvilMessage.add(1);
+                                String msg=Constant.classNameToJspName.get(classFileName) + "------ScriptEngine可受request控制，该文件为webshell!!!";
+                                logger.info(msg);
+                                Constant.evilClass.add(classFileName);
+                                Constant.msgList.add(msg);
+                            }
+                            tmpTaintList.add(taint);
+                        }
+                    }
+                    toEvilTaint.put("ScriptEngine",tmpTaintList);
+                }
+
+                if(scriptEnginePut){
+                    Set taintList=argTaint.get(2);
+                    Set tmpTaintList=new HashSet();
+                    for (Object taint:taintList){
+                        if(taint instanceof Integer){
+                            if (!printEvilMessage.contains(1)) {
+                                printEvilMessage.add(1);
+                                String msg=Constant.classNameToJspName.get(classFileName) + "------ScriptEngine可受request控制，该文件为webshell!!!";
+                                logger.info(msg);
+                                Constant.evilClass.add(classFileName);
+                                Constant.msgList.add(msg);
+                            }
+                            tmpTaintList.add(taint);
+                        }
+                    }
+                    toEvilTaint.put("ScriptEngine",tmpTaintList);
+                }
+            }
             //调用实例方法
             if (opcode == Opcodes.INVOKEVIRTUAL) {
                 //下面这些bool判断出了Runtime exc的，其他都是看有没有调用到字符串处理的方法，如果有字符串处理的方法，把污点传递(污点中包含字符串明文，传递到一些方法中会做对应模拟处理，比如append会把污点中的字符串相加)
